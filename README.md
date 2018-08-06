@@ -25,7 +25,7 @@ Go implementation of a RPKI to Router protocol.
 $ ./gortr -bind 127.0.0.1:8282 -cache datasource
 ```
 
-## Data sources
+### Data sources
 
 Use your own validator, as long as the JSON source follows the following schema:
 ```
