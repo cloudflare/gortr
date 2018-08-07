@@ -32,7 +32,8 @@ type RTREventHandler interface {
 type ROAManager interface {
 	GetCurrentSerial(uint16) (uint32, bool)
 	GetSessionId(*Client) (uint16, error)
-	GetROAsSerial(uint32) ([]ROA, bool)
+	GetCurrentROAs() ([]ROA, bool)
+	GetROAsSerialDiff(uint32) ([]ROA, bool)
 }
 
 type DefaultRTREventHandler struct {
@@ -51,7 +52,7 @@ func (e *DefaultRTREventHandler) RequestCache(c *Client) {
 		c.SendNoDataError()
 		log.Debugf("%v < No data", c)
 	} else {
-		roas, exists := e.roaManager.GetROAsSerial(serial)
+		roas, exists := e.roaManager.GetCurrentROAs()
 		if !exists {
 			c.SendInternalError()
 			log.Debugf("%v < Internal error requesting cache (does not exists)", c)
@@ -69,7 +70,7 @@ func (e *DefaultRTREventHandler) RequestNewVersion(c *Client, sessionId uint16, 
 		c.SendNoDataError()
 		log.Debugf("%v < No data", c)
 	} else {
-		roas, exists := e.roaManager.GetROAsSerial(serialNumber)
+		roas, exists := e.roaManager.GetROAsSerialDiff(serialNumber)
 		if !exists {
 			c.SendCacheReset()
 			log.Debugf("%v < Sent cache reset", c)
@@ -253,16 +254,23 @@ func (s *Server) GetSessionId(c *Client) (uint16, error) {
 	return s.sessId, nil
 }
 
-func (s *Server) GetROAsSerial(serial uint32) ([]ROA, bool) {
+func (s *Server) GetCurrentROAs() ([]ROA, bool) {
 	s.roalock.RLock()
-	roa, ok := s.getROAsSerial(serial)
+	roa := s.roaCurrent
+	s.roalock.RUnlock()
+	return roa, true
+}
+
+func (s *Server) GetROAsSerialDiff(serial uint32) ([]ROA, bool) {
+	s.roalock.RLock()
+	roa, ok := s.getROAsSerialDiff(serial)
 	s.roalock.RUnlock()
 	return roa, ok
 }
 
-func (s *Server) getROAsSerial(serial uint32) ([]ROA, bool) {
+func (s *Server) getROAsSerialDiff(serial uint32) ([]ROA, bool) {
 	if serial == s.roaCurrentSerial {
-		return s.roaCurrent, true
+		return []ROA{}, true
 	}
 
 	roa := make([]ROA, 0)
@@ -308,7 +316,7 @@ func (s *Server) AddROAs(roas []ROA) {
 	curDiff := make([]ROA, 0)
 
 	curserial, _ := s.getCurrentSerial()
-	roaCurrent, _ := s.getROAsSerial(curserial)
+	roaCurrent, _ := s.getROAsSerialDiff(curserial)
 
 	added, removed, unchanged := ComputeDiff(roas, roaCurrent)
 	curDiff = append(added, removed...)

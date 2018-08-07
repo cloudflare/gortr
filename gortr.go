@@ -34,7 +34,7 @@ var (
 	TLSCert = flag.String("tls.cert", "", "Certificate path")
 	TLSKey  = flag.String("tls.key", "", "Private key path")
 
-	CacheBin        = flag.String("cache", "rpki.json", "URL of the cached JSON data")
+	CacheBin        = flag.String("cache", "https://rpki.cloudflare.com/rpki.json", "URL of the cached JSON data")
 	RefreshInterval = flag.Int("refresh", 600, "Refresh interval in seconds")
 	MaxConn         = flag.Int("maxconn", 0, "Max simultaneous connections (0 to disable limit)")
 	SendNotifs      = flag.Bool("notifications", true, "Send notifications to clients")
