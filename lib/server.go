@@ -58,7 +58,7 @@ func (e *DefaultRTREventHandler) RequestCache(c *Client) {
 			log.Debugf("%v < Internal error requesting cache (does not exists)", c)
 		} else {
 			c.SendROAs(sessionId, serial, roas)
-			log.Debugf("%v < Sent ROAs", c)
+			log.Debugf("%v < Sent ROAs (current serial %v)", c, serial)
 		}
 	}
 }
@@ -76,7 +76,7 @@ func (e *DefaultRTREventHandler) RequestNewVersion(c *Client, sessionId uint16, 
 			log.Debugf("%v < Sent cache reset", c)
 		} else {
 			c.SendROAs(sessionId, serial, roas)
-			log.Debugf("%v < Sent ROAs", c)
+			log.Debugf("%v < Sent ROAs (current serial %v)", c, serial)
 		}
 	}
 }
@@ -290,7 +290,7 @@ func (s *Server) GetCurrentSerial(sessId uint16) (uint32, bool) {
 
 func (s *Server) getCurrentSerial() (uint32, bool) {
 	if len(s.roaListSerial) > 0 {
-		return s.roaListSerial[len(s.roaListSerial)-1], true
+		return s.roaCurrentSerial, true
 	} else {
 		return 0, false
 	}
@@ -315,12 +315,11 @@ func (s *Server) AddROAs(roas []ROA) {
 	s.roalock.RLock()
 	curDiff := make([]ROA, 0)
 
-	curserial, _ := s.getCurrentSerial()
-	roaCurrent, _ := s.getROAsSerialDiff(curserial)
+	roaCurrent := s.roaCurrent
 
 	added, removed, unchanged := ComputeDiff(roas, roaCurrent)
+	log.Debugf("Computed diff: added (%v), removed (%v), unchanged (%v)", added, removed, unchanged)
 	curDiff = append(added, removed...)
-	curDiff = append(curDiff, unchanged...)
 	s.roalock.RUnlock()
 
 	s.AddROAsDiff(curDiff)

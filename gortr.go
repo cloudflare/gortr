@@ -180,6 +180,14 @@ func (s *state) update_file(file string) {
 
 	s.server.AddROAs(roas)
 
+	sessid, _ := s.server.GetSessionId(nil)
+	serial, _ := s.server.GetCurrentSerial(sessid)
+	log.Infof("Updated added, new serial %v", serial)
+	if s.sendNotifs {
+		log.Debugf("Sending motifications to clients")
+		s.server.NotifyClientsLatest()
+	}
+
 	if s.metricsEvent != nil {
 		var countv4_dup int
 		var countv6_dup int
@@ -209,6 +217,7 @@ type state struct {
 	lastconverted []byte
 	lasthash      []byte
 	lastts        time.Time
+	sendNotifs    bool
 
 	server *rtr.Server
 
@@ -292,6 +301,7 @@ func main() {
 	s := state{
 		server: server,
 		metricsEvent: me,
+		sendNotifs: *SendNotifs,
 	}
 
 	if *Bind == "" && *BindTLS == "" {
