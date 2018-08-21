@@ -5,6 +5,11 @@ Go implementation of a RPKI to Router protocol.
 * `/lib` contains a library to create your own server and client.
 * `gortr.go` is a simple implementation that fetches a list and offers it to a router.
 
+## Disclaimer
+
+_This software comes with no warranty. It is not **yet** used in production inside Cloudflare._
+_The links listed in this documents may not be valid: rpki.cloudflare.com is a placeholder at the moment and should be operational during September 2018._
+
 ## Features of the server
 
 * Refreshes a JSON list of prefixes (from either Cloudflare or a RIPE Validator)
