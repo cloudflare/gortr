@@ -632,11 +632,12 @@ func (c *Client) Start() {
 	buf := make([]byte, 8000)
 	for c.connected {
 		length, err := c.tcpconn.Read(buf)
-		if err != nil {
+		if err != nil || length == 0 {
 			log.Debugf("Error %v", err)
 			c.Disconnect()
 			return
 		}
+		
 		pkt := buf[0:length]
 		dec, _ := DecodeBytes(pkt)
 		if !c.disableVersionCheck {
