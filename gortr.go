@@ -22,7 +22,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const AppVersion = "RPKI Cache v2018.8.0"
+const AppVersion = "GoRTR v2018.9.0"
 
 var (
 	MetricsAddr = flag.String("metrics.addr", "127.0.0.1:8080", "Metrics address")
