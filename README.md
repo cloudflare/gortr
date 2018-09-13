@@ -57,8 +57,10 @@ $ openssl ec -in private.pem -pubout -outform pem > public.pem
 ## Run it
 
 ```bash
-$ ./gortr -bind 127.0.0.1:8282 -cache datasource
+$ ./gortr -bind 127.0.0.1:8282
 ```
+
+Make sure cf.pub is in the current directory. Or pass `-verify.key=path/to/cf.pub`
 
 ### Data sources
 
@@ -81,6 +83,9 @@ Use your own validator, as long as the JSON source follows the following schema:
   * [NTT](https://rpki.gin.ntt.net/api/export.json)
   * [RIPE](http://localcert.ripe.net:8088/export.json)
   * [LACNIC](http://ripeval.labs.lacnic.net:8080/export.json)
+  
+To use a data source that do not contains signatures or validity information, pass:
+`-verify=false -checktime=false`
 
 ### Configure on Juniper
 
