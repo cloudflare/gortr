@@ -545,8 +545,8 @@ type Client struct {
 	simpleHandler RTREventHandler
 	curserial     uint32
 
-	transmits     chan PDU
-	quit          chan bool
+	transmits chan PDU
+	quit      chan bool
 
 	enforceVersion      bool
 	disableVersionCheck bool
@@ -637,7 +637,7 @@ func (c *Client) Start() {
 			c.Disconnect()
 			return
 		}
-		
+
 		pkt := buf[0:length]
 		dec, _ := DecodeBytes(pkt)
 		if !c.disableVersionCheck {
@@ -773,7 +773,7 @@ func (c *Client) SendROA(roa ROA) {
 
 func (c *Client) SendRawPDU(pdu PDU) {
 	//c.tcpconn.Write(pdu.Bytes())
-	c.transmits <-pdu
+	c.transmits <- pdu
 }
 
 func (c *Client) SendPDU(pdu PDU) {
@@ -788,10 +788,10 @@ func (c *Client) Disconnect() {
 		c.handler.ClientDisconnected(c)
 	}
 	select {
-		case c.quit <- true:
-		default:
-			
+	case c.quit <- true:
+	default:
+
 	}
-	
+
 	c.tcpconn.Close()
 }

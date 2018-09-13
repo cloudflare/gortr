@@ -2,12 +2,19 @@ package main
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
+	"errors"
 	"flag"
 	"fmt"
+	"github.com/cloudflare/gortr/prefixfile"
 	rtr "github.com/cloudflare/gortr/lib"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
@@ -16,13 +23,11 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"time"
 	"strings"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"time"
 )
 
-const AppVersion = "GoRTR v2018.9.0"
+const AppVersion = "GoRTR 0.9.2"
 
 var (
 	MetricsAddr = flag.String("metrics.addr", "127.0.0.1:8080", "Metrics address")
@@ -33,6 +38,10 @@ var (
 	BindTLS = flag.String("tls.bind", "", "Bind address for TLS")
 	TLSCert = flag.String("tls.cert", "", "Certificate path")
 	TLSKey  = flag.String("tls.key", "", "Private key path")
+
+	TimeCheck = flag.Bool("checktime", true, "Check if file is still valid")
+	Verify    = flag.Bool("verify", true, "Check signature using public key provided")
+	PublicKey = flag.String("verify.key", "cf.pub", "Public key path (PEM file)")
 
 	CacheBin        = flag.String("cache", "https://rpki.cloudflare.com/rpki.json", "URL of the cached JSON data")
 	RefreshInterval = flag.Int("refresh", 600, "Refresh interval in seconds")
@@ -73,18 +82,18 @@ var (
 )
 
 func initMetrics() {
-    prometheus.MustRegister(NumberOfROAs)
-    prometheus.MustRegister(LastRefresh)
-    prometheus.MustRegister(ClientsMetric)
-    prometheus.MustRegister(PDUsRecv)
+	prometheus.MustRegister(NumberOfROAs)
+	prometheus.MustRegister(LastRefresh)
+	prometheus.MustRegister(ClientsMetric)
+	prometheus.MustRegister(PDUsRecv)
 }
 
 func metricHTTP() {
-    http.Handle(*MetricsPath, promhttp.Handler())
-    log.Fatal(http.ListenAndServe(*MetricsAddr, nil))
+	http.Handle(*MetricsPath, promhttp.Handler())
+	log.Fatal(http.ListenAndServe(*MetricsAddr, nil))
 }
 
-func fetch_file(file string) ([]byte, error) {
+func fetchFile(file string) ([]byte, error) {
 	var f io.Reader
 	var err error
 	if len(file) > 8 && (file[0:7] == "http://" || file[0:8] == "https://") {
@@ -106,17 +115,21 @@ func fetch_file(file string) ([]byte, error) {
 	return data, nil
 }
 
-func check_file(data []byte) ([]byte, error) {
+func checkFile(data []byte) ([]byte, error) {
 	hsum := sha256.Sum256(data)
 	return hsum[:], nil
 }
 
-func decode_data(data []byte) ([]rtr.ROA, int, int, int) {
+func decodeJSON(data []byte) (*prefixfile.ROAList, error) {
 	buf := bytes.NewBuffer(data)
 	dec := json.NewDecoder(buf)
 
-	var roalistjson ROAList
-	dec.Decode(&roalistjson)
+	var roalistjson prefixfile.ROAList
+	err := dec.Decode(&roalistjson)
+	return &roalistjson, err
+}
+
+func processData(roalistjson *prefixfile.ROAList) ([]rtr.ROA, int, int, int) {
 	//log.Debugf("%v", roalistjson)
 	filterDuplicates := make(map[string]bool)
 
@@ -138,7 +151,7 @@ func decode_data(data []byte) ([]rtr.ROA, int, int, int) {
 			countv6++
 		}
 
-		key := fmt.Sprintf("%v%v%v", prefix, asn, v.Length)
+		key := fmt.Sprintf("%v,%v,%v", prefix, asn, v.Length)
 		_, exists := filterDuplicates[key]
 		if !exists {
 			filterDuplicates[key] = true
@@ -156,24 +169,54 @@ func decode_data(data []byte) ([]rtr.ROA, int, int, int) {
 	return roalist, count, countv4, countv6
 }
 
-func (s *state) update_file(file string) {
+func (s *state) updateFile(file string) error {
 	log.Debugf("Refreshing cache")
-	data, err := fetch_file(file)
+	data, err := fetchFile(file)
 	if err != nil {
 		log.Error(err)
-		return
+		return err
 	}
-	hsum, _ := check_file(data)
+	hsum, _ := checkFile(data)
 	if s.lasthash != nil {
 		cres := bytes.Compare(s.lasthash, hsum)
 		if cres == 0 {
-			log.Info("Identical files")
-			return
+			return errors.New("Identical files")
 		}
 	}
+
 	s.lastts = time.Now().UTC()
 	s.lastdata = data
-	roas, count, countv4, countv6 := decode_data(s.lastdata)
+
+	roalistjson, err := decodeJSON(s.lastdata)
+	if err != nil {
+		return err
+	}
+
+	if s.checktime {
+		validtime := time.Unix(int64(roalistjson.Metadata.Valid), 0).UTC()
+		if time.Now().UTC().After(validtime) {
+			return errors.New(fmt.Sprintf("File is expired: %v", validtime))
+		}
+	}
+
+	if s.verify {
+		if roalistjson.Metadata.SignatureDate == "" || roalistjson.Metadata.Signature == "" {
+			return errors.New("No signatures in file")
+		}
+
+		validdata, validdatatime, err := roalistjson.CheckFile(s.pubkey)
+		if err != nil {
+			return err
+		}
+		if !(validdata && (validdatatime || !s.checktime)) {
+			return errors.New("Invalid signatures")
+		}
+	}
+
+	roas, count, countv4, countv6 := processData(roalistjson)
+	if err != nil {
+		return err
+	}
 	log.Infof("New update (%v uniques, %v total prefixes). %v bytes. Updating sha256 hash %x -> %x",
 		len(roas), count, len(s.lastconverted), s.lasthash, hsum)
 	s.lasthash = hsum
@@ -200,14 +243,18 @@ func (s *state) update_file(file string) {
 		}
 		s.metricsEvent.UpdateMetrics(countv4, countv6, countv4_dup, countv6_dup, s.lastts, file)
 	}
+	return nil
 }
 
-func (s *state) routine_update(file string, interval int) {
+func (s *state) routineUpdate(file string, interval int) {
 	log.Debugf("Starting refresh routine (file: %v, interval: %vs)", file, interval)
 	for {
 		select {
 		case <-time.After(time.Duration(interval) * time.Second):
-			s.update_file(file)
+			err := s.updateFile(file)
+			if err != nil {
+				log.Errorf("Error updating: %v", err)
+			}
 		}
 	}
 }
@@ -222,10 +269,13 @@ type state struct {
 	server *rtr.Server
 
 	metricsEvent *metricsEvent
+
+	pubkey    *ecdsa.PublicKey
+	verify    bool
+	checktime bool
 }
 
 type metricsEvent struct {
-
 }
 
 func (m *metricsEvent) ClientConnected(c *rtr.Client) {
@@ -251,21 +301,24 @@ func (m *metricsEvent) UpdateMetrics(numIPv4 int, numIPv6 int, numIPv4filtered i
 	NumberOfROAs.WithLabelValues("ipv4", "unfiltered", file).Set(float64(numIPv4))
 	NumberOfROAs.WithLabelValues("ipv6", "filtered", file).Set(float64(numIPv6filtered))
 	NumberOfROAs.WithLabelValues("ipv6", "unfiltered", file).Set(float64(numIPv6))
-
-	LastRefresh.WithLabelValues(file).Set(float64(refreshed.UnixNano()/1e9))
-
+	LastRefresh.WithLabelValues(file).Set(float64(refreshed.UnixNano() / 1e9))
 }
 
+func ReadPublicKey(key []byte, isPem bool) (*ecdsa.PublicKey, error) {
+	if isPem {
+		block, _ := pem.Decode(key)
+		key = block.Bytes
+	}
 
-type ROAJson struct {
-	Prefix string `json:"prefix"`
-	Length uint8  `json:"maxLength"`
-	ASN    string `json:"asn"`
-	TA     string `json:"ta"`
-}
-
-type ROAList struct {
-	Data []ROAJson `json:"roas"`
+	k, err := x509.ParsePKIXPublicKey(key)
+	if err != nil {
+		return nil, err
+	}
+	kconv, ok := k.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, errors.New("Not EDCSA public key")
+	}
+	return kconv, nil
 }
 
 func main() {
@@ -285,7 +338,7 @@ func main() {
 	sc := rtr.ServerConfiguration{
 		ProtocolVersion: rtr.PROTOCOL_VERSION_0,
 		KeepDifference:  3,
-		Loglevel: uint32(lvl),
+		Loglevel:        uint32(lvl),
 	}
 
 	var me *metricsEvent
@@ -298,10 +351,26 @@ func main() {
 	server := rtr.NewServer(sc, me, deh)
 	deh.SetROAManager(server)
 
+	var pubkey *ecdsa.PublicKey
+	if *Verify {
+		pubkeyBytes, err := ioutil.ReadFile(*PublicKey)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		pubkey, err = ReadPublicKey(pubkeyBytes, true)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	s := state{
-		server: server,
+		server:       server,
 		metricsEvent: me,
-		sendNotifs: *SendNotifs,
+		sendNotifs:   *SendNotifs,
+		pubkey:       pubkey,
+		verify:       *Verify,
+		checktime:    *TimeCheck,
 	}
 
 	if *Bind == "" && *BindTLS == "" {
@@ -322,7 +391,10 @@ func main() {
 		go server.StartTLS(*BindTLS, tlsConfig)
 	}
 
-	s.update_file(*CacheBin)
-	s.routine_update(*CacheBin, *RefreshInterval)
+	err := s.updateFile(*CacheBin)
+	if err != nil {
+		log.Errorf("Error updating: %v", err)
+	}
+	s.routineUpdate(*CacheBin, *RefreshInterval)
 
 }

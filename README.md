@@ -3,12 +3,12 @@
 GoRTR is an open-source implementation of RPKI to Router protocol (RFC 6810) using the [the Go Programming Language](http://golang.org/).
 
 * `/lib` contains a library to create your own server and client.
-* `gortr.go` is a simple implementation that fetches a list and offers it to a router.
+* `/file` contains the structure of a JSON export file and signing capabilities.
+* `/cmd/gortr/gortr.go` is a simple implementation that fetches a list and offers it to a router.
 
 ## Disclaimer
 
-_This software comes with no warranty.
-_The links listed in this documents may not be valid: rpki.cloudflare.com is a placeholder at the moment and should be operational during September 2018._
+_This software comes with no warranty._
 
 ## Features of the server
 
@@ -16,16 +16,16 @@ _The links listed in this documents may not be valid: rpki.cloudflare.com is a p
 * Prometheus metrics
 * Lightweight
 * TLS
+* Signature verification and expiration control
 
 ## Features of the API
 
 * Protocol v0 of [RFC6810](https://tools.ietf.org/html/rfc6810)
-* Protocol v1 of [draft-ietf-sidr-rpki-rtr-rfc6810-bis-09](https://tools.ietf.org/html/draft-ietf-sidr-rpki-rtr-rfc6810-bis-09)
+* Protocol v1 of [RFC8210](https://tools.ietf.org/html/rfc8210)
 * Event-driven API
 * TLS
 
 ## To start developing
-
 You need a working [Go environment](https://golang.org/doc/install) (1.10 or newer).
 
 ```bash
@@ -33,9 +33,30 @@ $ git clone git@github.com:cloudflare/gortr.git && cd gortr
 $ go build gortr
 ```
 
+## Install it
+
+```bash
+$ go get github.com/cloudflare/gortr/cmd/gortr
+```
+
+Copy `cf.pub` to your local directory if you want to use Cloudflare's signed JSON file.
+
+Create TLS certificates if you want to use the TLS feature:
+
+```bash
+$ openssl ecparam -genkey -name prime256v1 -noout -outform pem > private.pem
+$ openssl req -new -x509 -key private.pem -out server.pem
+```
+
+If you want to sign your list of prefixes, generate an ECDSA key (similar to the first command above).
+Then generate the public key.
+```bash
+$ openssl ec -in private.pem -pubout -outform pem > public.pem
+```
+
 ## Run it
 
-```
+```bash
 $ ./gortr -bind 127.0.0.1:8282 -cache datasource
 ```
 
@@ -55,7 +76,7 @@ Use your own validator, as long as the JSON source follows the following schema:
 }
 ```
 
-* [**Cloudflare**](https://rpki.cloudflare.com/rpki.json) *(list curated, compressed and cached in +150 PoPs)*
+* [**Cloudflare**](https://rpki.cloudflare.com/rpki.json) *(list curated, signed, compressed and cached in +150 PoPs)*
 * **Third-party RIPE Validators:**
   * [NTT](https://rpki.gin.ntt.net/api/export.json)
   * [RIPE](http://localcert.ripe.net:8088/export.json)
