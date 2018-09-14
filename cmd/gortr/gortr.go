@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-const AppVersion = "GoRTR 0.9.2"
+const AppVersion = "GoRTR 0.9.3"
 
 var (
 	MetricsAddr = flag.String("metrics.addr", "127.0.0.1:8080", "Metrics address")
@@ -97,7 +97,15 @@ func fetchFile(file string) ([]byte, error) {
 	var f io.Reader
 	var err error
 	if len(file) > 8 && (file[0:7] == "http://" || file[0:8] == "https://") {
-		fhttp, err := http.Get(file)
+
+		client := &http.Client{}
+		req, err := http.NewRequest("GET", file, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "text/json")
+
+		fhttp, err := client.Do(req)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +138,6 @@ func decodeJSON(data []byte) (*prefixfile.ROAList, error) {
 }
 
 func processData(roalistjson *prefixfile.ROAList) ([]rtr.ROA, int, int, int) {
-	//log.Debugf("%v", roalistjson)
 	filterDuplicates := make(map[string]bool)
 
 	roalist := make([]rtr.ROA, 0)
