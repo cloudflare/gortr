@@ -30,7 +30,7 @@ You need a working [Go environment](https://golang.org/doc/install) (1.10 or new
 
 ```bash
 $ git clone git@github.com:cloudflare/gortr.git && cd gortr
-$ go build gortr
+$ go build cmd/gortr/gortr.go
 ```
 
 ## Install it
