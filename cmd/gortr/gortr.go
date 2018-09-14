@@ -30,17 +30,17 @@ import (
 const AppVersion = "GoRTR 0.9.3"
 
 var (
-	MetricsAddr = flag.String("metrics.addr", "127.0.0.1:8080", "Metrics address")
+	MetricsAddr = flag.String("metrics.addr", ":8080", "Metrics address")
 	MetricsPath = flag.String("metrics.path", "/metrics", "Metrics path")
 
-	Bind = flag.String("bind", "127.0.0.1:8282", "Bind address")
+	Bind = flag.String("bind", ":8282", "Bind address")
 
 	BindTLS = flag.String("tls.bind", "", "Bind address for TLS")
 	TLSCert = flag.String("tls.cert", "", "Certificate path")
 	TLSKey  = flag.String("tls.key", "", "Private key path")
 
 	TimeCheck = flag.Bool("checktime", true, "Check if file is still valid")
-	Verify    = flag.Bool("verify", true, "Check signature using public key provided")
+	Verify    = flag.Bool("verify", true, "Check signature using provided public key")
 	PublicKey = flag.String("verify.key", "cf.pub", "Public key path (PEM file)")
 
 	CacheBin        = flag.String("cache", "https://rpki.cloudflare.com/rpki.json", "URL of the cached JSON data")
@@ -177,7 +177,7 @@ func processData(roalistjson *prefixfile.ROAList) ([]rtr.ROA, int, int, int) {
 }
 
 func (s *state) updateFile(file string) error {
-	log.Debugf("Refreshing cache")
+	log.Debugf("Refreshing cache from %v", file)
 	data, err := fetchFile(file)
 	if err != nil {
 		log.Error(err)
@@ -207,6 +207,7 @@ func (s *state) updateFile(file string) error {
 	}
 
 	if s.verify {
+		log.Debugf("Verifying signature in %v", file)
 		if roalistjson.Metadata.SignatureDate == "" || roalistjson.Metadata.Signature == "" {
 			return errors.New("No signatures in file")
 		}
@@ -218,6 +219,7 @@ func (s *state) updateFile(file string) error {
 		if !(validdata && (validdatatime || !s.checktime)) {
 			return errors.New("Invalid signatures")
 		}
+		log.Debugf("Signature verified")
 	}
 
 	roas, count, countv4, countv6 := processData(roalistjson)
@@ -234,7 +236,7 @@ func (s *state) updateFile(file string) error {
 	serial, _ := s.server.GetCurrentSerial(sessid)
 	log.Infof("Updated added, new serial %v", serial)
 	if s.sendNotifs {
-		log.Debugf("Sending motifications to clients")
+		log.Debugf("Sending notifications to clients")
 		s.server.NotifyClientsLatest()
 	}
 
