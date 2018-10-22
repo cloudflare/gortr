@@ -639,7 +639,12 @@ func (c *Client) Start() {
 		}
 
 		pkt := buf[0:length]
-		dec, _ := DecodeBytes(pkt)
+		dec, err := DecodeBytes(pkt)
+		if err != nil || dec == nil {
+			log.Errorf("Error %v", err)
+			c.Disconnect()
+			continue
+		}
 		if !c.disableVersionCheck {
 			c.checkVersion(dec.GetVersion())
 		}
