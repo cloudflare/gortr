@@ -598,14 +598,30 @@ func Decode(rdr io.Reader) (PDU, error) {
 			Prefix:  ipnet,
 		}, nil
 	case PDU_ID_END_OF_DATA:
-		if len(toread) != 4 {
-			return nil, errors.New(fmt.Sprintf("Wrong length for End of Data PDU: %v != 4", len(toread)))
+		if len(toread) != 4 && len(toread) != 16 {
+			return nil, errors.New(fmt.Sprintf("Wrong length for End of Data PDU: %v != 4 or != 16", len(toread)))
 		}
-		serial := binary.BigEndian.Uint32(toread)
+
+		var serial uint32
+		var refreshInterval uint32
+		var retryInterval uint32
+		var expireInterval uint32
+		if len(toread) == 4 {
+			serial = binary.BigEndian.Uint32(toread)
+		} else if len(toread) == 16 {
+			serial = binary.BigEndian.Uint32(toread[0:4])
+			refreshInterval = binary.BigEndian.Uint32(toread[4:8])
+			retryInterval = binary.BigEndian.Uint32(toread[8:12])
+			expireInterval = binary.BigEndian.Uint32(toread[12:16])
+		}
+
 		return &PDUEndOfData{
 			Version:      pver,
 			SessionId:    sessionId,
 			SerialNumber: serial,
+			RefreshInterval: refreshInterval,
+			RetryInterval: retryInterval,
+			ExpireInterval: expireInterval,
 		}, nil
 	case PDU_ID_CACHE_RESET:
 		if len(toread) != 0 {

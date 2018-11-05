@@ -80,19 +80,19 @@ type ROAJson struct {
 	Prefix string `json:"prefix"`
 	Length uint8  `json:"maxLength"`
 	ASN    string `json:"asn"`
-	TA     string `json:"ta"`
+	TA     string `json:"ta,omitempty"`
 }
 
 type MetaData struct {
 	Counts        int    `json:"counts"`
 	Generated     int    `json:"generated"`
-	Valid         int    `json:"valid"`
+	Valid         int    `json:"valid,omitempty"`
 	Signature     string `json:"signature,omitempty"`
 	SignatureDate string `json:"signatureDate,omitempty"`
 }
 
 type ROAList struct {
-	Metadata MetaData  `json:"metadata"`
+	Metadata MetaData  `json:"metadata,omitempty"`
 	Data     []ROAJson `json:"roas"`
 }
 

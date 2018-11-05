@@ -631,6 +631,7 @@ func (c *Client) Start() {
 
 	buf := make([]byte, 8000)
 	for c.connected {
+		// Remove this?
 		length, err := c.tcpconn.Read(buf)
 		if err != nil || length == 0 {
 			log.Debugf("Error %v", err)
