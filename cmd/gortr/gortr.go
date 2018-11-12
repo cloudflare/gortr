@@ -148,7 +148,7 @@ func processData(roalistjson *prefixfile.ROAList) ([]rtr.ROA, int, int, int) {
 	for _, v := range roalistjson.Data {
 		_, prefix, _ := net.ParseCIDR(v.Prefix)
 		asnStr := v.ASN[2:len(v.ASN)]
-		asnInt, _ := strconv.Atoi(asnStr)
+		asnInt, _ := strconv.ParseUint(asnStr, 10, 32)
 		asn := uint32(asnInt)
 
 		count++
