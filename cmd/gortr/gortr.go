@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-const AppVersion = "GoRTR 0.9.4"
+const AppVersion = "GoRTR 0.9.5"
 
 var (
 	MetricsAddr = flag.String("metrics.addr", ":8080", "Metrics address")

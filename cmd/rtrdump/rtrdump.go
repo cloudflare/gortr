@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const AppVersion = "RTRdump 0.9.4"
+const AppVersion = "RTRdump 0.9.5"
 
 var (
 	Connect = flag.String("connect", "127.0.0.1:8282", "Connection address")
