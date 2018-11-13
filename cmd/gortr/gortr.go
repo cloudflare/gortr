@@ -11,8 +11,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/cloudflare/gortr/prefixfile"
 	rtr "github.com/cloudflare/gortr/lib"
+	"github.com/cloudflare/gortr/prefixfile"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -349,7 +349,7 @@ func main() {
 	sc := rtr.ServerConfiguration{
 		ProtocolVersion: rtr.PROTOCOL_VERSION_0,
 		KeepDifference:  3,
-		Log: log.StandardLogger(),
+		Log:             log.StandardLogger(),
 	}
 
 	var me *metricsEvent

@@ -1,9 +1,9 @@
 package rtrlib
 
 import (
+	"crypto/tls"
 	"net"
 	"time"
-	"crypto/tls"
 )
 
 type RTRClientSessionEventHandler interface {
@@ -20,9 +20,9 @@ type ClientSession struct {
 
 	curserial uint32
 	transmits chan PDU
-	quit chan bool
+	quit      chan bool
 
-	tcpconn       net.Conn
+	tcpconn net.Conn
 
 	handler RTRClientSessionEventHandler
 
@@ -31,7 +31,7 @@ type ClientSession struct {
 
 type ClientConfiguration struct {
 	ProtocolVersion uint8
-	
+
 	RefreshInterval uint32
 	RetryInterval   uint32
 	ExpireInterval  uint32
@@ -41,11 +41,11 @@ type ClientConfiguration struct {
 
 func NewClientSession(configuration ClientConfiguration, handler RTRClientSessionEventHandler) *ClientSession {
 	return &ClientSession{
-		version: configuration.ProtocolVersion,
+		version:   configuration.ProtocolVersion,
 		transmits: make(chan PDU, 256),
-		quit: make(chan bool),
-		log: configuration.Log,
-		handler: handler,
+		quit:      make(chan bool),
+		log:       configuration.Log,
+		handler:   handler,
 	}
 }
 
@@ -84,7 +84,7 @@ func (c *ClientSession) sendLoop() {
 func (c *ClientSession) refreshLoop() {
 	for c.connected {
 		select {
-		case <-time.After(20*time.Second):
+		case <-time.After(20 * time.Second):
 			// send refresh
 		}
 	}
@@ -117,7 +117,7 @@ func (c *ClientSession) StartWithConn(tcpconn net.Conn) error {
 		dec, err := Decode(c.tcpconn)
 		if err != nil || dec == nil {
 			if c.log != nil {
-				c.log.Errorf("Error %v", err)	
+				c.log.Errorf("Error %v", err)
 			}
 			c.Disconnect()
 			return err

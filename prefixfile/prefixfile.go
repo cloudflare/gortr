@@ -8,10 +8,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"sort"
-	"strings"
-	"strconv"
 	"net"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 func (roalist *ROAList) GenerateDigest() ([]byte, []byte, error) {

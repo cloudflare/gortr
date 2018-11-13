@@ -37,7 +37,7 @@ type ROAManager interface {
 
 type DefaultRTREventHandler struct {
 	roaManager ROAManager
-	Log Logger
+	Log        Logger
 }
 
 func (e *DefaultRTREventHandler) SetROAManager(m ROAManager) {
@@ -46,7 +46,7 @@ func (e *DefaultRTREventHandler) SetROAManager(m ROAManager) {
 
 func (e *DefaultRTREventHandler) RequestCache(c *Client) {
 	if e.Log != nil {
-		e.Log.Debugf("%v > Request Cache", c)	
+		e.Log.Debugf("%v > Request Cache", c)
 	}
 	sessionId, _ := e.roaManager.GetSessionId(c)
 	serial, valid := e.roaManager.GetCurrentSerial(sessionId)

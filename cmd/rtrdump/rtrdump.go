@@ -1,17 +1,17 @@
 package main
 
 import (
+	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"fmt"
 	rtr "github.com/cloudflare/gortr/lib"
 	"github.com/cloudflare/gortr/prefixfile"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"os"
 	"runtime"
-	"encoding/json"
 	"time"
-	"io"
-	"crypto/tls"
 )
 
 const AppVersion = "RTRdump 0.9.4"
@@ -20,7 +20,7 @@ var (
 	Connect = flag.String("connect", "127.0.0.1:8282", "Connection address")
 	OutFile = flag.String("file", "output.json", "Output file")
 
-	UseTLS = flag.Bool("tls.enable", false, "Use TLS")
+	UseTLS       = flag.Bool("tls.enable", false, "Use TLS")
 	ValidateCert = flag.Bool("tls.validate", true, "Validate TLS")
 
 	RefreshInterval = flag.Int("refresh", 600, "Refresh interval in seconds")
@@ -36,29 +36,29 @@ type Client struct {
 func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
 	log.Debugf("Received: %v", pdu)
 	switch pdu := pdu.(type) {
-		case *rtr.PDUIPv4Prefix:
-			rj := prefixfile.ROAJson{
-				Prefix: pdu.Prefix.String(),
-				ASN: fmt.Sprintf("AS%v", pdu.ASN),
-				Length: pdu.MaxLen,
-			}
-			c.Data.Data = append(c.Data.Data, rj)
-			c.Data.Metadata.Counts++
-		case *rtr.PDUIPv6Prefix:
-			rj := prefixfile.ROAJson{
-				Prefix: pdu.Prefix.String(),
-				ASN: fmt.Sprintf("AS%v", pdu.ASN),
-				Length: pdu.MaxLen,
-			}
-			c.Data.Data = append(c.Data.Data, rj)
-			c.Data.Metadata.Counts++
-		case *rtr.PDUEndOfData:
-			t := time.Now().UTC().UnixNano()/1000000000
-			c.Data.Metadata.Generated = int(t)
-			c.Data.Metadata.Valid = int(pdu.SerialNumber)
-			cs.Disconnect()
-		default:
-			cs.Disconnect()
+	case *rtr.PDUIPv4Prefix:
+		rj := prefixfile.ROAJson{
+			Prefix: pdu.Prefix.String(),
+			ASN:    fmt.Sprintf("AS%v", pdu.ASN),
+			Length: pdu.MaxLen,
+		}
+		c.Data.Data = append(c.Data.Data, rj)
+		c.Data.Metadata.Counts++
+	case *rtr.PDUIPv6Prefix:
+		rj := prefixfile.ROAJson{
+			Prefix: pdu.Prefix.String(),
+			ASN:    fmt.Sprintf("AS%v", pdu.ASN),
+			Length: pdu.MaxLen,
+		}
+		c.Data.Data = append(c.Data.Data, rj)
+		c.Data.Metadata.Counts++
+	case *rtr.PDUEndOfData:
+		t := time.Now().UTC().UnixNano() / 1000000000
+		c.Data.Metadata.Generated = int(t)
+		c.Data.Metadata.Valid = int(pdu.SerialNumber)
+		cs.Disconnect()
+	default:
+		cs.Disconnect()
 	}
 }
 
@@ -67,7 +67,7 @@ func (c *Client) ClientConnected(cs *rtr.ClientSession) {
 }
 
 func (c *Client) ClientDisconnected(cs *rtr.ClientSession) {
-	
+
 }
 
 func main() {
@@ -82,17 +82,15 @@ func main() {
 	lvl, _ := log.ParseLevel(*LogLevel)
 	log.SetLevel(lvl)
 
-
 	cc := rtr.ClientConfiguration{
 		ProtocolVersion: rtr.PROTOCOL_VERSION_1,
-		Log: log.StandardLogger(),
+		Log:             log.StandardLogger(),
 	}
 
 	client := &Client{
 		Data: prefixfile.ROAList{
-			Metadata: prefixfile.MetaData{
-			},
-			Data: make([]prefixfile.ROAJson, 0),
+			Metadata: prefixfile.MetaData{},
+			Data:     make([]prefixfile.ROAJson, 0),
 		},
 	}
 
@@ -103,7 +101,7 @@ func main() {
 	}
 	err := clientSession.Start(*Connect, *UseTLS, config)
 	if err != nil {
-		log.Fatal(err)	
+		log.Fatal(err)
 	}
 
 	var f io.Writer
@@ -117,7 +115,7 @@ func main() {
 	} else {
 		f = os.Stdout
 	}
-	
+
 	enc := json.NewEncoder(f)
 	err = enc.Encode(client.Data)
 	if err != nil {

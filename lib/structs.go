@@ -9,7 +9,7 @@ import (
 	"net"
 )
 
-type Logger interface{
+type Logger interface {
 	Debugf(string, ...interface{})
 	Printf(string, ...interface{})
 	Warnf(string, ...interface{})
@@ -624,12 +624,12 @@ func Decode(rdr io.Reader) (PDU, error) {
 		}
 
 		return &PDUEndOfData{
-			Version:      pver,
-			SessionId:    sessionId,
-			SerialNumber: serial,
+			Version:         pver,
+			SessionId:       sessionId,
+			SerialNumber:    serial,
 			RefreshInterval: refreshInterval,
-			RetryInterval: retryInterval,
-			ExpireInterval: expireInterval,
+			RetryInterval:   retryInterval,
+			ExpireInterval:  expireInterval,
 		}, nil
 	case PDU_ID_CACHE_RESET:
 		if len(toread) != 0 {
