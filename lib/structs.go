@@ -9,6 +9,14 @@ import (
 	"net"
 )
 
+type Logger interface{
+	Debugf(string, ...interface{})
+	Printf(string, ...interface{})
+	Warnf(string, ...interface{})
+	Errorf(string, ...interface{})
+	Infof(string, ...interface{})
+}
+
 const (
 	PROTOCOL_VERSION_0 = 0
 	PROTOCOL_VERSION_1 = 1

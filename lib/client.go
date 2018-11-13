@@ -13,13 +13,6 @@ type RTRClientSessionEventHandler interface {
 	ClientDisconnected(*ClientSession)
 }
 
-type Logger interface{
-	Debugf(string, ...interface{})
-	Printf(string, ...interface{})
-	Errorf(string, ...interface{})
-	Infof(string, ...interface{})
-}
-
 type ClientSession struct {
 	version uint8
 

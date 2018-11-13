@@ -342,12 +342,14 @@ func main() {
 	lvl, _ := log.ParseLevel(*LogLevel)
 	log.SetLevel(lvl)
 
-	deh := &rtr.DefaultRTREventHandler{}
+	deh := &rtr.DefaultRTREventHandler{
+		Log: log.StandardLogger(),
+	}
 
 	sc := rtr.ServerConfiguration{
 		ProtocolVersion: rtr.PROTOCOL_VERSION_0,
 		KeepDifference:  3,
-		Loglevel:        uint32(lvl),
+		Log: log.StandardLogger(),
 	}
 
 	var me *metricsEvent
@@ -387,7 +389,12 @@ func main() {
 	}
 
 	if *Bind != "" {
-		go server.Start(*Bind)
+		go func() {
+			err := server.Start(*Bind)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}()
 	}
 	if *BindTLS != "" {
 		cert, err := tls.LoadX509KeyPair(*TLSCert, *TLSKey)
@@ -397,7 +404,12 @@ func main() {
 		tlsConfig := tls.Config{
 			Certificates: []tls.Certificate{cert},
 		}
-		go server.StartTLS(*BindTLS, tlsConfig)
+		go func() {
+			err := server.StartTLS(*BindTLS, tlsConfig)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}()
 	}
 
 	err := s.updateFile(*CacheBin)

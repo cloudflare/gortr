@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"net"
 	"sync"
@@ -38,6 +37,7 @@ type ROAManager interface {
 
 type DefaultRTREventHandler struct {
 	roaManager ROAManager
+	Log Logger
 }
 
 func (e *DefaultRTREventHandler) SetROAManager(m ROAManager) {
@@ -45,38 +45,54 @@ func (e *DefaultRTREventHandler) SetROAManager(m ROAManager) {
 }
 
 func (e *DefaultRTREventHandler) RequestCache(c *Client) {
-	log.Debugf("%v > Request Cache", c)
+	if e.Log != nil {
+		e.Log.Debugf("%v > Request Cache", c)	
+	}
 	sessionId, _ := e.roaManager.GetSessionId(c)
 	serial, valid := e.roaManager.GetCurrentSerial(sessionId)
 	if !valid {
 		c.SendNoDataError()
-		log.Debugf("%v < No data", c)
+		if e.Log != nil {
+			e.Log.Debugf("%v < No data", c)
+		}
 	} else {
 		roas, exists := e.roaManager.GetCurrentROAs()
 		if !exists {
 			c.SendInternalError()
-			log.Debugf("%v < Internal error requesting cache (does not exists)", c)
+			if e.Log != nil {
+				e.Log.Debugf("%v < Internal error requesting cache (does not exists)", c)
+			}
 		} else {
 			c.SendROAs(sessionId, serial, roas)
-			log.Debugf("%v < Sent ROAs (current serial %v)", c, serial)
+			if e.Log != nil {
+				e.Log.Debugf("%v < Sent ROAs (current serial %v)", c, serial)
+			}
 		}
 	}
 }
 
 func (e *DefaultRTREventHandler) RequestNewVersion(c *Client, sessionId uint16, serialNumber uint32) {
-	log.Debugf("%v > Request New Version", c)
+	if e.Log != nil {
+		e.Log.Debugf("%v > Request New Version", c)
+	}
 	serial, valid := e.roaManager.GetCurrentSerial(sessionId)
 	if !valid {
 		c.SendNoDataError()
-		log.Debugf("%v < No data", c)
+		if e.Log != nil {
+			e.Log.Debugf("%v < No data", c)
+		}
 	} else {
 		roas, exists := e.roaManager.GetROAsSerialDiff(serialNumber)
 		if !exists {
 			c.SendCacheReset()
-			log.Debugf("%v < Sent cache reset", c)
+			if e.Log != nil {
+				e.Log.Debugf("%v < Sent cache reset", c)
+			}
 		} else {
 			c.SendROAs(sessionId, serial, roas)
-			log.Debugf("%v < Sent ROAs (current serial %v)", c, serial)
+			if e.Log != nil {
+				e.Log.Debugf("%v < Sent ROAs (current serial %v)", c, serial)
+			}
 		}
 	}
 }
@@ -104,6 +120,8 @@ type Server struct {
 	pduRefreshInterval uint32
 	pduRetryInterval   uint32
 	pduExpireInterval  uint32
+
+	log Logger
 }
 
 type ServerConfiguration struct {
@@ -118,7 +136,7 @@ type ServerConfiguration struct {
 	RetryInterval   uint32
 	ExpireInterval  uint32
 
-	Loglevel uint32
+	Log Logger
 }
 
 func NewServer(configuration ServerConfiguration, handler RTRServerEventHandler, simpleHandler RTREventHandler) *Server {
@@ -128,8 +146,6 @@ func NewServer(configuration ServerConfiguration, handler RTRServerEventHandler,
 	} else {
 		sessid = uint16(configuration.SessId)
 	}
-
-	log.SetLevel(log.Level(configuration.Loglevel))
 
 	refreshInterval := uint32(3600)
 	if configuration.RefreshInterval != 0 {
@@ -165,6 +181,8 @@ func NewServer(configuration ServerConfiguration, handler RTRServerEventHandler,
 		pduRefreshInterval: refreshInterval,
 		pduRetryInterval:   retryInterval,
 		pduExpireInterval:  expireInterval,
+
+		log: configuration.Log,
 	}
 }
 
@@ -318,7 +336,9 @@ func (s *Server) AddROAs(roas []ROA) {
 	roaCurrent := s.roaCurrent
 
 	added, removed, unchanged := ComputeDiff(roas, roaCurrent)
-	log.Debugf("Computed diff: added (%v), removed (%v), unchanged (%v)", added, removed, unchanged)
+	if s.log != nil {
+		s.log.Debugf("Computed diff: added (%v), removed (%v), unchanged (%v)", added, removed, unchanged)
+	}
 	curDiff = append(added, removed...)
 	s.roalock.RUnlock()
 
@@ -388,7 +408,9 @@ func (s *Server) SetMaxConnections(maxconn int) {
 	if s.connected > maxconn {
 		todisconnect := s.connected - maxconn
 		clients := s.GetClientList()
-		log.Debugf("Too many clients connected, disconnecting first %v", todisconnect)
+		if s.log != nil {
+			s.log.Debugf("Too many clients connected, disconnecting first %v", todisconnect)
+		}
 		for i := 0; i < todisconnect; i++ {
 			if len(clients) > i {
 				clients[i].Disconnect()
@@ -437,7 +459,9 @@ func (s *Server) ClientDisconnected(c *Client) {
 func (s *Server) HandlePDU(c *Client, pdu PDU) {
 	if s.enforceVersion && c.GetVersion() != s.baseVersion {
 		// Enforce a single version
-		log.Debugf("Client %v uses version %v and server is using %v", c.String(), c.GetVersion(), s.baseVersion)
+		if s.log != nil {
+			s.log.Debugf("Client %v uses version %v and server is using %v", c.String(), c.GetVersion(), s.baseVersion)
+		}
 		c.SendWrongVersionError()
 		c.Disconnect()
 	}
@@ -463,12 +487,13 @@ func (s *Server) RequestNewVersion(c *Client, sessionId uint16, serial uint32) {
 	}
 }
 
-func (s *Server) Start(bind string) {
+func (s *Server) Start(bind string) error {
 	tcplist, err := net.Listen("tcp", bind)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	s.loopTCP(tcplist)
+	return nil
 }
 
 func (s *Server) loopTCP(tcplist net.Listener) {
@@ -476,11 +501,16 @@ func (s *Server) loopTCP(tcplist net.Listener) {
 		tcpconn, _ := tcplist.Accept()
 
 		if s.maxconn > 0 && s.connected >= s.maxconn {
-			log.Warnf("Could not accept connection from %v (not enough slots avaible: %v)", tcpconn.RemoteAddr(), s.maxconn)
+			if s.log != nil {
+				s.log.Warnf("Could not accept connection from %v (not enough slots avaible: %v)", tcpconn.RemoteAddr(), s.maxconn)
+			}
 			tcpconn.Close()
 		} else {
-			log.Infof("Accepted connection from %v (%v/%v)", tcpconn.RemoteAddr(), s.connected+1, s.maxconn)
+			if s.log != nil {
+				s.log.Infof("Accepted connection from %v (%v/%v)", tcpconn.RemoteAddr(), s.connected+1, s.maxconn)
+			}
 			client := ClientFromConn(tcpconn, s, s)
+			client.log = s.log
 			if s.enforceVersion {
 				client.SetVersion(s.baseVersion)
 			}
@@ -490,12 +520,13 @@ func (s *Server) loopTCP(tcplist net.Listener) {
 	}
 }
 
-func (s *Server) StartTLS(bind string, config tls.Config) {
+func (s *Server) StartTLS(bind string, config tls.Config) error {
 	tcplist, err := tls.Listen("tcp", bind, &config)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	s.loopTCP(tcplist)
+	return nil
 }
 
 func (s *Server) GetClientList() []*Client {
@@ -554,6 +585,8 @@ type Client struct {
 	refreshInterval uint32
 	retryInterval   uint32
 	expireInterval  uint32
+
+	log Logger
 }
 
 func (c *Client) String() string {
@@ -591,7 +624,9 @@ func (c *Client) checkVersion(newversion uint8) {
 	if (!c.versionset || newversion == c.version) && (newversion == 1 || newversion == 0) {
 		c.SetVersion(newversion)
 	} else {
-		log.Debugf("%v: has bad version (received: v%v, current: v%v) error", c.String(), newversion, c.version)
+		if c.log != nil {
+			c.log.Debugf("%v: has bad version (received: v%v, current: v%v) error", c.String(), newversion, c.version)
+		}
 		c.SendWrongVersionError()
 		c.Disconnect()
 	}
@@ -634,7 +669,9 @@ func (c *Client) Start() {
 		// Remove this?
 		length, err := c.tcpconn.Read(buf)
 		if err != nil || length == 0 {
-			log.Debugf("Error %v", err)
+			if c.log != nil {
+				c.log.Debugf("Error %v", err)
+			}
 			c.Disconnect()
 			return
 		}
@@ -642,18 +679,24 @@ func (c *Client) Start() {
 		pkt := buf[0:length]
 		dec, err := DecodeBytes(pkt)
 		if err != nil || dec == nil {
-			log.Errorf("Error %v", err)
+			if c.log != nil {
+				c.log.Errorf("Error %v", err)
+			}
 			c.Disconnect()
 			continue
 		}
 		if !c.disableVersionCheck {
 			c.checkVersion(dec.GetVersion())
 		}
-		log.Debugf("%v: Received %v", c.String(), dec)
+		if c.log != nil {
+			c.log.Debugf("%v: Received %v", c.String(), dec)
+		}
 
 		if c.enforceVersion {
 			if !IsCorrectPDUVersion(dec, c.version) {
-				log.Debugf("Bad version error")
+				if c.log != nil {
+					c.log.Debugf("Bad version error")
+				}
 				c.SendWrongVersionError()
 				c.Disconnect()
 			}
@@ -789,7 +832,9 @@ func (c *Client) SendPDU(pdu PDU) {
 
 func (c *Client) Disconnect() {
 	c.connected = false
-	log.Debugf("Disconnecting client %v", c.String())
+	if c.log != nil {
+		c.log.Debugf("Disconnecting client %v", c.String())
+	}
 	if c.handler != nil {
 		c.handler.ClientDisconnected(c)
 	}

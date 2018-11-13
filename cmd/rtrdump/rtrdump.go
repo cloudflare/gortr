@@ -57,6 +57,8 @@ func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
 			c.Data.Metadata.Generated = int(t)
 			c.Data.Metadata.Valid = int(pdu.SerialNumber)
 			cs.Disconnect()
+		default:
+			cs.Disconnect()
 	}
 }
 
