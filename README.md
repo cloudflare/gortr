@@ -18,6 +18,12 @@ _This software comes with no warranty._
 * TLS
 * Signature verification and expiration control
 
+## Features of the extractor
+
+* Generate a list of prefixes sent via RTR (similar to Cloudflare JSON input, or RIPE RPKI Validator)
+* Lightweight
+* TLS
+
 ## Features of the API
 
 * Protocol v0 of [RFC6810](https://tools.ietf.org/html/rfc6810)
@@ -61,6 +67,12 @@ $ ./gortr -bind 127.0.0.1:8282
 ```
 
 Make sure cf.pub is in the current directory. Or pass `-verify.key=path/to/cf.pub`
+
+## Debug the content
+
+```bash
+$ ./rtrdump -connect 127.0.0.1:8282 -file debug.json
+```
 
 ### Data sources
 
