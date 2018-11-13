@@ -3,7 +3,7 @@
 GoRTR is an open-source implementation of RPKI to Router protocol (RFC 6810) using the [the Go Programming Language](http://golang.org/).
 
 * `/lib` contains a library to create your own server and client.
-* `/file` contains the structure of a JSON export file and signing capabilities.
+* `/prefixfile` contains the structure of a JSON export file and signing capabilities.
 * `/cmd/gortr/gortr.go` is a simple implementation that fetches a list and offers it to a router.
 
 ## Disclaimer
