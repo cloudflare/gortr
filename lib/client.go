@@ -9,6 +9,8 @@ import (
 type RTRClientSessionEventHandler interface {
 	//RequestCache(*ClientSession)
 	HandlePDU(*ClientSession, PDU)
+	ClientConnected(*ClientSession)
+	ClientDisconnected(*ClientSession)
 }
 
 type Logger interface{
@@ -36,7 +38,6 @@ type ClientSession struct {
 
 type ClientConfiguration struct {
 	ProtocolVersion uint8
-	EnforceVersion  bool
 	
 	RefreshInterval uint32
 	RetryInterval   uint32
@@ -47,6 +48,7 @@ type ClientConfiguration struct {
 
 func NewClientSession(configuration ClientConfiguration, handler RTRClientSessionEventHandler) *ClientSession {
 	return &ClientSession{
+		version: configuration.ProtocolVersion,
 		transmits: make(chan PDU, 256),
 		quit: make(chan bool),
 		log: configuration.Log,
@@ -98,9 +100,9 @@ func (c *ClientSession) refreshLoop() {
 func (c *ClientSession) Disconnect() {
 	c.connected = false
 	//log.Debugf("Disconnecting client %v", c.String())
-	//if c.handler != nil {
-	//	c.handler.ClientDisconnected(c)
-	//}
+	if c.handler != nil {
+		c.handler.ClientDisconnected(c)
+	}
 	select {
 	case c.quit <- true:
 	default:
@@ -113,12 +115,11 @@ func (c *ClientSession) Disconnect() {
 func (c *ClientSession) StartWithConn(tcpconn net.Conn) error {
 	c.tcpconn = tcpconn
 	c.connected = true
-	//if c.handler != nil {
-	//	c.handler.ClientConnected(c)
-	//}
 
 	go c.sendLoop()
-	c.SendResetQuery()
+	if c.handler != nil {
+		c.handler.ClientConnected(c)
+	}
 	for c.connected {
 		dec, err := Decode(c.tcpconn)
 		if err != nil || dec == nil {
@@ -128,6 +129,13 @@ func (c *ClientSession) StartWithConn(tcpconn net.Conn) error {
 			c.Disconnect()
 			return err
 		}
+		if c.version == PROTOCOL_VERSION_1 && dec.GetVersion() == PROTOCOL_VERSION_0 {
+			if c.log != nil {
+				c.log.Infof("Downgrading to version 0")
+				c.version = PROTOCOL_VERSION_0
+			}
+		}
+
 		if c.handler != nil {
 			c.handler.HandlePDU(c, dec)
 		}

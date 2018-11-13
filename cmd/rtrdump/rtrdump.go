@@ -60,11 +60,11 @@ func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
 	}
 }
 
-func (c *Client) Connected(cs *rtr.ClientSession) {
+func (c *Client) ClientConnected(cs *rtr.ClientSession) {
 	cs.SendResetQuery()
 }
 
-func (c *Client) Disconnected(cs *rtr.ClientSession) {
+func (c *Client) ClientDisconnected(cs *rtr.ClientSession) {
 	
 }
 
@@ -82,7 +82,7 @@ func main() {
 
 
 	cc := rtr.ClientConfiguration{
-		ProtocolVersion: rtr.PROTOCOL_VERSION_0,
+		ProtocolVersion: rtr.PROTOCOL_VERSION_1,
 		Log: log.StandardLogger(),
 	}
 
