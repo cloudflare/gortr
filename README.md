@@ -3,7 +3,7 @@
 GoRTR is an open-source implementation of RPKI to Router protocol (RFC 6810) using the [the Go Programming Language](http://golang.org/).
 
 * `/lib` contains a library to create your own server and client.
-* `/file` contains the structure of a JSON export file and signing capabilities.
+* `/prefixfile` contains the structure of a JSON export file and signing capabilities.
 * `/cmd/gortr/gortr.go` is a simple implementation that fetches a list and offers it to a router.
 
 ## Disclaimer
@@ -17,6 +17,12 @@ _This software comes with no warranty._
 * Lightweight
 * TLS
 * Signature verification and expiration control
+
+## Features of the extractor
+
+* Generate a list of prefixes sent via RTR (similar to Cloudflare JSON input, or RIPE RPKI Validator)
+* Lightweight
+* TLS
 
 ## Features of the API
 
@@ -61,6 +67,12 @@ $ ./gortr -bind 127.0.0.1:8282
 ```
 
 Make sure cf.pub is in the current directory. Or pass `-verify.key=path/to/cf.pub`
+
+## Debug the content
+
+```bash
+$ ./rtrdump -connect 127.0.0.1:8282 -file debug.json
+```
 
 ### Data sources
 

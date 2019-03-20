@@ -11,8 +11,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/cloudflare/gortr/prefixfile"
 	rtr "github.com/cloudflare/gortr/lib"
+	"github.com/cloudflare/gortr/prefixfile"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-const AppVersion = "GoRTR 0.9.4"
+const AppVersion = "GoRTR 0.9.5"
 
 var (
 	MetricsAddr = flag.String("metrics.addr", ":8080", "Metrics address")
@@ -44,6 +44,7 @@ var (
 	PublicKey = flag.String("verify.key", "cf.pub", "Public key path (PEM file)")
 
 	CacheBin        = flag.String("cache", "https://rpki.cloudflare.com/rpki.json", "URL of the cached JSON data")
+	UserAgent       = flag.String("useragent", "Cloudflare-GoRTR (+https://github.com/cloudflare/gortr)", "User-Agent header")
 	RefreshInterval = flag.Int("refresh", 600, "Refresh interval in seconds")
 	MaxConn         = flag.Int("maxconn", 0, "Max simultaneous connections (0 to disable limit)")
 	SendNotifs      = flag.Bool("notifications", true, "Send notifications to clients")
@@ -93,13 +94,14 @@ func metricHTTP() {
 	log.Fatal(http.ListenAndServe(*MetricsAddr, nil))
 }
 
-func fetchFile(file string) ([]byte, error) {
+func fetchFile(file string, ua string) ([]byte, error) {
 	var f io.Reader
 	var err error
 	if len(file) > 8 && (file[0:7] == "http://" || file[0:8] == "https://") {
 
 		client := &http.Client{}
 		req, err := http.NewRequest("GET", file, nil)
+		req.Header.Set("User-Agent", ua)
 		if err != nil {
 			return nil, err
 		}
@@ -178,7 +180,7 @@ func processData(roalistjson *prefixfile.ROAList) ([]rtr.ROA, int, int, int) {
 
 func (s *state) updateFile(file string) error {
 	log.Debugf("Refreshing cache from %v", file)
-	data, err := fetchFile(file)
+	data, err := fetchFile(file, s.userAgent)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -274,6 +276,7 @@ type state struct {
 	lasthash      []byte
 	lastts        time.Time
 	sendNotifs    bool
+	userAgent     string
 
 	server *rtr.Server
 
@@ -342,12 +345,14 @@ func main() {
 	lvl, _ := log.ParseLevel(*LogLevel)
 	log.SetLevel(lvl)
 
-	deh := &rtr.DefaultRTREventHandler{}
+	deh := &rtr.DefaultRTREventHandler{
+		Log: log.StandardLogger(),
+	}
 
 	sc := rtr.ServerConfiguration{
 		ProtocolVersion: rtr.PROTOCOL_VERSION_0,
 		KeepDifference:  3,
-		Loglevel:        uint32(lvl),
+		Log:             log.StandardLogger(),
 	}
 
 	var me *metricsEvent
@@ -380,6 +385,7 @@ func main() {
 		pubkey:       pubkey,
 		verify:       *Verify,
 		checktime:    *TimeCheck,
+		userAgent: *UserAgent,
 	}
 
 	if *Bind == "" && *BindTLS == "" {
@@ -387,7 +393,12 @@ func main() {
 	}
 
 	if *Bind != "" {
-		go server.Start(*Bind)
+		go func() {
+			err := server.Start(*Bind)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}()
 	}
 	if *BindTLS != "" {
 		cert, err := tls.LoadX509KeyPair(*TLSCert, *TLSKey)
@@ -397,7 +408,12 @@ func main() {
 		tlsConfig := tls.Config{
 			Certificates: []tls.Certificate{cert},
 		}
-		go server.StartTLS(*BindTLS, tlsConfig)
+		go func() {
+			err := server.StartTLS(*BindTLS, tlsConfig)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}()
 	}
 
 	err := s.updateFile(*CacheBin)
