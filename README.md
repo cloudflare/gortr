@@ -5,6 +5,7 @@ GoRTR is an open-source implementation of RPKI to Router protocol (RFC 6810) usi
 * `/lib` contains a library to create your own server and client.
 * `/prefixfile` contains the structure of a JSON export file and signing capabilities.
 * `/cmd/gortr/gortr.go` is a simple implementation that fetches a list and offers it to a router.
+* `/cmd/rtrdump/rtrdump.go` allows.
 
 ## Disclaimer
 
@@ -32,7 +33,9 @@ _This software comes with no warranty._
 * TLS
 
 ## To start developing
+
 You need a working [Go environment](https://golang.org/doc/install) (1.10 or newer).
+This project also uses [Go Modules](https://github.com/golang/go/wiki/Modules).
 
 ```bash
 $ git clone git@github.com:cloudflare/gortr.git && cd gortr
@@ -62,6 +65,9 @@ $ openssl ec -in private.pem -pubout -outform pem > public.pem
 
 ## Run it
 
+Once you have a binary, from either the `~/go/bin/` (if you did `go get` or `go build`)
+or the [Releases page](https://github.com/cloudflare/gortr/releases):
+
 ```bash
 $ ./gortr -bind 127.0.0.1:8282
 ```
@@ -90,7 +96,7 @@ Use your own validator, as long as the JSON source follows the following schema:
 }
 ```
 
-* [**Cloudflare**](https://rpki.cloudflare.com/rpki.json) *(list curated, signed, compressed and cached in +150 PoPs)*
+* [**Cloudflare**](https://rpki.cloudflare.com/rpki.json) *(list curated, signed, compressed and cached in +160 PoPs)*
 * **Third-party RIPE Validators:**
   * [NTT](https://rpki.gin.ntt.net/api/export.json)
   * [RIPE](http://localcert.ripe.net:8088/export.json)
@@ -98,6 +104,8 @@ Use your own validator, as long as the JSON source follows the following schema:
   
 To use a data source that do not contains signatures or validity information, pass:
 `-verify=false -checktime=false`
+
+Cloudflare's prefix list removes duplicates and entries that are not routed on the Internet (>/24 IPv4 and >/48 IPv6).
 
 ### Configure on Juniper
 

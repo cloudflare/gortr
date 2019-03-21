@@ -13,5 +13,6 @@ RUN apk --update --no-cache add ca-certificates && \
     adduser -S -D -H -h / rtr
 USER rtr
 
-COPY --from=builder /go/bin/gortr /go/src/${src_uri}/cf.pub /
+COPY --from=builder /go/bin/gortr /
+COPY cmd/gortr/cf.pub /
 ENTRYPOINT ["./gortr"]
