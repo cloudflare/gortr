@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/ssh"
 	"io"
 	"io/ioutil"
 	"net"
@@ -27,17 +28,32 @@ import (
 	"time"
 )
 
-const AppVersion = "GoRTR 0.9.5"
+const (
+	AppVersion = "GoRTR 0.9.5"
+
+	ENV_SSH_PASSWORD = "RTR_SSH_PASSWORD"
+
+	METHOD_NONE = iota
+	METHOD_PASSWORD
+	METHOD_KEY
+)
 
 var (
 	MetricsAddr = flag.String("metrics.addr", ":8080", "Metrics address")
 	MetricsPath = flag.String("metrics.path", "/metrics", "Metrics path")
+	RTRVersion  = flag.Int("protocol", 1, "RTR protocol version")
 
 	Bind = flag.String("bind", ":8282", "Bind address")
 
 	BindTLS = flag.String("tls.bind", "", "Bind address for TLS")
 	TLSCert = flag.String("tls.cert", "", "Certificate path")
 	TLSKey  = flag.String("tls.key", "", "Private key path")
+
+	BindSSH = flag.String("ssh.bind", "", "Bind address for SSH")
+	SSHKey  = flag.String("ssh.key", "private.pem", "SSH host key")
+	SSHAuth = flag.String("ssh.method", "none", "Select SSH method (none or password)")
+	SSHAuthUser = flag.String("ssh.auth.user", "rpki", "SSH user")
+	SSHAuthPassword = flag.String("ssh.auth.password", "", "SSH password (if blank, will use envvar GORTR_SSH_PASSWORD)")
 
 	TimeCheck = flag.Bool("checktime", true, "Check if file is still valid")
 	Verify    = flag.Bool("verify", true, "Check signature using provided public key")
@@ -80,6 +96,16 @@ var (
 		},
 		[]string{"type"},
 	)
+
+	protoverToLib = map[int]uint8{
+		0: rtr.PROTOCOL_VERSION_0,
+		1: rtr.PROTOCOL_VERSION_1,
+	}
+	authToId = map[string]int{
+		"none": METHOD_NONE,
+		"password":   METHOD_PASSWORD,
+		//"key":   METHOD_KEY,
+	}
 )
 
 func initMetrics() {
@@ -178,6 +204,14 @@ func processData(roalistjson *prefixfile.ROAList) ([]rtr.ROA, int, int, int) {
 	return roalist, count, countv4, countv6
 }
 
+type IdenticalFile struct {
+	File string
+}
+
+func (e IdenticalFile) Error() string {
+	return fmt.Sprintf("File %v is identical to the previous version", e.File)
+}
+
 func (s *state) updateFile(file string) error {
 	log.Debugf("Refreshing cache from %v", file)
 	data, err := fetchFile(file, s.userAgent)
@@ -189,7 +223,7 @@ func (s *state) updateFile(file string) error {
 	if s.lasthash != nil {
 		cres := bytes.Compare(s.lasthash, hsum)
 		if cres == 0 {
-			return errors.New("Identical files")
+			return IdenticalFile{File: file}
 		}
 	}
 
@@ -264,7 +298,12 @@ func (s *state) routineUpdate(file string, interval int) {
 		case <-time.After(time.Duration(interval) * time.Second):
 			err := s.updateFile(file)
 			if err != nil {
-				log.Errorf("Error updating: %v", err)
+				switch err.(type) {
+				case IdenticalFile:
+					log.Info(err)
+				default:
+					log.Errorf("Error updating: %v", err)
+				}
 			}
 		}
 	}
@@ -350,7 +389,7 @@ func main() {
 	}
 
 	sc := rtr.ServerConfiguration{
-		ProtocolVersion: rtr.PROTOCOL_VERSION_0,
+		ProtocolVersion: protoverToLib[*RTRVersion],
 		KeepDifference:  3,
 		Log:             log.StandardLogger(),
 	}
@@ -385,10 +424,10 @@ func main() {
 		pubkey:       pubkey,
 		verify:       *Verify,
 		checktime:    *TimeCheck,
-		userAgent: *UserAgent,
+		userAgent:    *UserAgent,
 	}
 
-	if *Bind == "" && *BindTLS == "" {
+	if *Bind == "" && *BindTLS == "" && *BindSSH == "" {
 		log.Fatalf("Specify at least a bind address")
 	}
 
@@ -409,7 +448,52 @@ func main() {
 			Certificates: []tls.Certificate{cert},
 		}
 		go func() {
-			err := server.StartTLS(*BindTLS, tlsConfig)
+			err := server.StartTLS(*BindTLS, &tlsConfig)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}()
+	}
+	if *BindSSH != "" {
+		sshkey, err := ioutil.ReadFile(*SSHKey)
+		if err != nil {
+			log.Fatal(err)
+		}
+		private, err := ssh.ParsePrivateKey(sshkey)
+		if err != nil {
+			log.Fatal("Failed to parse private key: ", err)
+		}
+
+		sshConfig := ssh.ServerConfig{}
+
+		if authType, ok := authToId[*SSHAuth]; ok {
+			if authType == METHOD_PASSWORD {
+				password := *SSHAuthPassword
+				if password == "" {
+					password = os.Getenv(ENV_SSH_PASSWORD)
+				}
+				sshConfig.PasswordCallback = func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+					log.Infof("Connected: %v/%v", conn.User(),  conn.RemoteAddr())
+					if conn.User() != *SSHAuthUser || !bytes.Equal(password, []byte(*SSHAuthPassword)) {
+						log.Warnf("Wrong user or password for %v/%v. Disconnecting.", conn.User(), conn.RemoteAddr())
+						return nil, errors.New("Wrong user or password")
+					}
+
+					return &ssh.Permissions{
+						CriticalOptions: make(map[string]string),
+						Extensions: make(map[string]string),
+					}, nil
+				}
+			} else if authType == METHOD_NONE {
+				sshConfig.NoClientAuth = true
+			}
+		} else {
+			log.Fatalf("Auth type %v unknown", *SSHAuth)
+		}
+
+		sshConfig.AddHostKey(private)
+		go func() {
+			err := server.StartSSH(*BindSSH, &sshConfig)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -418,7 +502,12 @@ func main() {
 
 	err := s.updateFile(*CacheBin)
 	if err != nil {
-		log.Errorf("Error updating: %v", err)
+		switch err.(type) {
+		case IdenticalFile:
+			log.Info(err)
+		default:
+			log.Errorf("Error updating: %v", err)
+		}
 	}
 	s.routineUpdate(*CacheBin, *RefreshInterval)
 

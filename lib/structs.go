@@ -43,6 +43,11 @@ const (
 	PDU_ERROR_BADPDUTYPE      = 5
 	PDU_ERROR_WITHDRAWUNKNOWN = 6
 	PDU_ERROR_DUPANNOUNCE     = 7
+
+	TYPE_UNKNOWN = iota
+	TYPE_PLAIN
+	TYPE_TLS
+	TYPE_SSH
 )
 
 type PDU interface {
@@ -502,11 +507,13 @@ func DecodeBytes(b []byte) (PDU, error) {
 }
 
 func Decode(rdr io.Reader) (PDU, error) {
+	if rdr == nil {
+		return nil, errors.New("Reader for decoding is nil")
+	}
 	var pver uint8
 	var pduType uint8
 	var sessionId uint16
 	var length uint32
-
 	err := binary.Read(rdr, binary.BigEndian, &pver)
 	if err != nil {
 		return nil, err

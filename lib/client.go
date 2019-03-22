@@ -2,6 +2,10 @@ package rtrlib
 
 import (
 	"crypto/tls"
+	"errors"
+	"fmt"
+	"golang.org/x/crypto/ssh"
+	"io"
 	"net"
 	"time"
 )
@@ -22,7 +26,11 @@ type ClientSession struct {
 	transmits chan PDU
 	quit      chan bool
 
-	tcpconn net.Conn
+	tcpconn    net.Conn
+	sshsession *ssh.Session
+
+	rd io.Reader
+	wr io.Writer
 
 	handler RTRClientSessionEventHandler
 
@@ -74,7 +82,9 @@ func (c *ClientSession) sendLoop() {
 	for c.connected {
 		select {
 		case pdu := <-c.transmits:
-			c.tcpconn.Write(pdu.Bytes())
+			if c.wr != nil {
+				c.wr.Write(pdu.Bytes())
+			}
 		case <-c.quit:
 			break
 		}
@@ -105,16 +115,13 @@ func (c *ClientSession) Disconnect() {
 	c.tcpconn.Close()
 }
 
-func (c *ClientSession) StartWithConn(tcpconn net.Conn) error {
-	c.tcpconn = tcpconn
-	c.connected = true
-
+func (c *ClientSession) StartRW(rd io.Reader, wr io.Writer) error {
 	go c.sendLoop()
 	if c.handler != nil {
 		c.handler.ClientConnected(c)
 	}
 	for c.connected {
-		dec, err := Decode(c.tcpconn)
+		dec, err := Decode(c.rd)
 		if err != nil || dec == nil {
 			if c.log != nil {
 				c.log.Errorf("Error %v", err)
@@ -133,27 +140,85 @@ func (c *ClientSession) StartWithConn(tcpconn net.Conn) error {
 			c.handler.HandlePDU(c, dec)
 		}
 	}
-
 	return nil
 }
 
-func (c *ClientSession) Start(addr string, useTls bool, config *tls.Config) error {
+func (c *ClientSession) StartWithConn(tcpconn net.Conn) error {
+	c.tcpconn = tcpconn
+	c.wr = tcpconn
+	c.rd = tcpconn
+	c.connected = true
+
+	return c.StartRW(c.tcpconn, c.tcpconn)
+}
+
+func (c *ClientSession) StartWithSSH(tcpconn *net.TCPConn, session *ssh.Session) error {
+	c.tcpconn = tcpconn
+	c.rd, _ = session.StdoutPipe()
+	c.wr, _ = session.StdinPipe()
+	c.connected = true
+
+	return c.StartRW(c.rd, c.wr)
+}
+
+func (c *ClientSession) StartPlain(addr string) error {
 	addrTCP, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return err
 	}
-	if useTls {
-		tcpconn, err := tls.Dial("tcp", addr, config)
-		if err != nil {
-			return err
-		}
-		return c.StartWithConn(tcpconn)
+	tcpconn, err := net.DialTCP("tcp", nil, addrTCP)
+	if err != nil {
+		return err
+	}
+	return c.StartWithConn(tcpconn)
+}
+
+func (c *ClientSession) StartTLS(addr string, config *tls.Config) error {
+	tcpconn, err := tls.Dial("tcp", addr, config)
+	if err != nil {
+		return err
+	}
+	return c.StartWithConn(tcpconn)
+}
+
+func (c *ClientSession) StartSSH(addr string, config *ssh.ClientConfig) error {
+	addrTCP, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return err
+	}
+	tcpconn, err := net.DialTCP("tcp", nil, addrTCP)
+	if err != nil {
+		return err
+	}
+
+	conn, chans, reqs, err := ssh.NewClientConn(tcpconn, addr, config)
+	if err != nil {
+		return err
+	}
+
+	//client, err := ssh.Dial("tcp", addr, config)
+	client := ssh.NewClient(conn, chans, reqs)
+	session, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	err = session.RequestSubsystem("rpki-rtr")
+	if err != nil {
+		return err
+	}
+	return c.StartWithSSH(tcpconn, session)
+}
+
+func (c *ClientSession) Start(addr string, connType int, configTLS *tls.Config, configSSH *ssh.ClientConfig) error {
+
+	if connType == TYPE_TLS {
+		return c.StartTLS(addr, configTLS)
+	} else if connType == TYPE_PLAIN {
+		return c.StartPlain(addr)
+	} else if connType == TYPE_SSH {
+		return c.StartSSH(addr, configSSH)
 	} else {
-		tcpconn, err := net.DialTCP("tcp", nil, addrTCP)
-		if err != nil {
-			return err
-		}
-		return c.StartWithConn(tcpconn)
+		return errors.New(fmt.Sprintf("Unknown type %v", connType))
 	}
 	return nil
 }
