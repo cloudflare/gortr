@@ -566,7 +566,7 @@ func (s *Server) acceptClientSSH(tcpconn net.Conn) error {
 						cont = false
 						break
 					}
-					
+
 				}
 			}
 		}

@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	rtr "github.com/cloudflare/gortr/lib"
@@ -14,7 +15,6 @@ import (
 	"os"
 	"runtime"
 	"time"
-	"errors"
 )
 
 const (
@@ -34,10 +34,10 @@ var (
 	ConnType     = flag.String("type", "plain", "Type of connection: plain, tls or ssh")
 	ValidateCert = flag.Bool("tls.validate", true, "Validate TLS")
 
-	ValidateSSH = flag.Bool("ssh.validate", false, "Validate SSH key")
-	SSHServerKey = flag.String("ssh.validate.key", "", "SSH server key SHA256 to validate")
-	SSHAuth = flag.String("ssh.method", "none", "Select SSH method (none or password)")
-	SSHAuthUser = flag.String("ssh.auth.user", "rpki", "SSH user")
+	ValidateSSH     = flag.Bool("ssh.validate", false, "Validate SSH key")
+	SSHServerKey    = flag.String("ssh.validate.key", "", "SSH server key SHA256 to validate")
+	SSHAuth         = flag.String("ssh.method", "none", "Select SSH method (none or password)")
+	SSHAuthUser     = flag.String("ssh.auth.user", "rpki", "SSH user")
 	SSHAuthPassword = flag.String("ssh.auth.password", "", fmt.Sprintf("SSH password (if blank, will use envvar %v)", ENV_SSH_PASSWORD))
 
 	RefreshInterval = flag.Int("refresh", 600, "Refresh interval in seconds")
@@ -51,8 +51,8 @@ var (
 		"ssh":   rtr.TYPE_SSH,
 	}
 	authToId = map[string]int{
-		"none": METHOD_NONE,
-		"password":   METHOD_PASSWORD,
+		"none":     METHOD_NONE,
+		"password": METHOD_PASSWORD,
 		//"key":   METHOD_KEY,
 	}
 )

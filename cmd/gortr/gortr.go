@@ -49,10 +49,10 @@ var (
 	TLSCert = flag.String("tls.cert", "", "Certificate path")
 	TLSKey  = flag.String("tls.key", "", "Private key path")
 
-	BindSSH = flag.String("ssh.bind", "", "Bind address for SSH")
-	SSHKey  = flag.String("ssh.key", "private.pem", "SSH host key")
-	SSHAuth = flag.String("ssh.method", "none", "Select SSH method (none or password)")
-	SSHAuthUser = flag.String("ssh.auth.user", "rpki", "SSH user")
+	BindSSH         = flag.String("ssh.bind", "", "Bind address for SSH")
+	SSHKey          = flag.String("ssh.key", "private.pem", "SSH host key")
+	SSHAuth         = flag.String("ssh.method", "none", "Select SSH method (none or password)")
+	SSHAuthUser     = flag.String("ssh.auth.user", "rpki", "SSH user")
 	SSHAuthPassword = flag.String("ssh.auth.password", "", "SSH password (if blank, will use envvar GORTR_SSH_PASSWORD)")
 
 	TimeCheck = flag.Bool("checktime", true, "Check if file is still valid")
@@ -102,8 +102,8 @@ var (
 		1: rtr.PROTOCOL_VERSION_1,
 	}
 	authToId = map[string]int{
-		"none": METHOD_NONE,
-		"password":   METHOD_PASSWORD,
+		"none":     METHOD_NONE,
+		"password": METHOD_PASSWORD,
 		//"key":   METHOD_KEY,
 	}
 )
@@ -473,7 +473,7 @@ func main() {
 					password = os.Getenv(ENV_SSH_PASSWORD)
 				}
 				sshConfig.PasswordCallback = func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-					log.Infof("Connected: %v/%v", conn.User(),  conn.RemoteAddr())
+					log.Infof("Connected: %v/%v", conn.User(), conn.RemoteAddr())
 					if conn.User() != *SSHAuthUser || !bytes.Equal(password, []byte(*SSHAuthPassword)) {
 						log.Warnf("Wrong user or password for %v/%v. Disconnecting.", conn.User(), conn.RemoteAddr())
 						return nil, errors.New("Wrong user or password")
@@ -481,7 +481,7 @@ func main() {
 
 					return &ssh.Permissions{
 						CriticalOptions: make(map[string]string),
-						Extensions: make(map[string]string),
+						Extensions:      make(map[string]string),
 					}, nil
 				}
 			} else if authType == METHOD_NONE {
