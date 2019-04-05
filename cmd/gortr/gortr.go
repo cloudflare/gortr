@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	AppVersion = "GoRTR 0.9.5"
+	AppVersion = "GoRTR 0.10.0"
 
 	ENV_SSH_PASSWORD = "RTR_SSH_PASSWORD"
 
