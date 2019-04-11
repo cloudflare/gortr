@@ -139,7 +139,12 @@ You can use password and key authentication:
 
 For example, to configure user **rpki** and password **rpki**:
 ```bash
-$ ./gortr -ssh.bind :8282 -ssh.key private.pem -ssh.method password -ssh.auth.user rpki -ssh.auth.password rpki -bind ""
+$ ./gortr -ssh.bind :8282 -ssh.key private.pem -ssh.method.password=true -ssh.auth.user rpki -ssh.auth.password rpki -bind ""
+```
+
+And to configure a bypass for every SSH key:
+```bash
+$ ./gortr -ssh.bind :8282 -ssh.key private.pem -ssh.method.key=true -ssh.auth.key.bypass=true -bind ""
 ```
 
 ## Debug the content
