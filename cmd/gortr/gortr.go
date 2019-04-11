@@ -26,10 +26,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"encoding/base64"
 )
 
 const (
-	AppVersion = "GoRTR 0.10.0"
+	AppVersion = "GoRTR 0.11.0"
 
 	ENV_SSH_PASSWORD = "RTR_SSH_PASSWORD"
 
@@ -51,16 +52,21 @@ var (
 
 	BindSSH         = flag.String("ssh.bind", "", "Bind address for SSH")
 	SSHKey          = flag.String("ssh.key", "private.pem", "SSH host key")
-	SSHAuth         = flag.String("ssh.method", "none", "Select SSH method (none or password)")
+
+	SSHAuthEnablePassword   = flag.Bool("ssh.method.password", false, "Enable password auth")
 	SSHAuthUser     = flag.String("ssh.auth.user", "rpki", "SSH user")
 	SSHAuthPassword = flag.String("ssh.auth.password", "", "SSH password (if blank, will use envvar GORTR_SSH_PASSWORD)")
+
+	SSHAuthEnableKey   = flag.Bool("ssh.method.key", false, "Enable key auth")
+	SSHAuthKeysBypass = flag.Bool("ssh.auth.key.bypass", false, "Accept any SSH key")
+	SSHAuthKeysList = flag.String("ssh.auth.key.file", "", "Authorized SSH key file (if blank, will use envvar GORTR_SSH_AUTHORIZEDKEYS")
 
 	TimeCheck = flag.Bool("checktime", true, "Check if file is still valid")
 	Verify    = flag.Bool("verify", true, "Check signature using provided public key")
 	PublicKey = flag.String("verify.key", "cf.pub", "Public key path (PEM file)")
 
 	CacheBin        = flag.String("cache", "https://rpki.cloudflare.com/rpki.json", "URL of the cached JSON data")
-	UserAgent       = flag.String("useragent", "Cloudflare-GoRTR (+https://github.com/cloudflare/gortr)", "User-Agent header")
+	UserAgent       = flag.String("useragent", fmt.Sprintf("Cloudflare-%v (+https://github.com/cloudflare/gortr)", AppVersion), "User-Agent header")
 	RefreshInterval = flag.Int("refresh", 600, "Refresh interval in seconds")
 	MaxConn         = flag.Int("maxconn", 0, "Max simultaneous connections (0 to disable limit)")
 	SendNotifs      = flag.Bool("notifications", true, "Send notifications to clients")
@@ -466,29 +472,66 @@ func main() {
 
 		sshConfig := ssh.ServerConfig{}
 
-		if authType, ok := authToId[*SSHAuth]; ok {
-			if authType == METHOD_PASSWORD {
-				password := *SSHAuthPassword
-				if password == "" {
-					password = os.Getenv(ENV_SSH_PASSWORD)
-				}
-				sshConfig.PasswordCallback = func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-					log.Infof("Connected: %v/%v", conn.User(), conn.RemoteAddr())
-					if conn.User() != *SSHAuthUser || !bytes.Equal(password, []byte(*SSHAuthPassword)) {
-						log.Warnf("Wrong user or password for %v/%v. Disconnecting.", conn.User(), conn.RemoteAddr())
-						return nil, errors.New("Wrong user or password")
-					}
-
-					return &ssh.Permissions{
-						CriticalOptions: make(map[string]string),
-						Extensions:      make(map[string]string),
-					}, nil
-				}
-			} else if authType == METHOD_NONE {
-				sshConfig.NoClientAuth = true
+		log.Infof("Enabling ssh with the following authentications: password=%v, key=%v", *SSHAuthEnablePassword, *SSHAuthEnableKey)
+		if *SSHAuthEnablePassword {
+			password := *SSHAuthPassword
+			if password == "" {
+				password = os.Getenv(ENV_SSH_PASSWORD)
 			}
-		} else {
-			log.Fatalf("Auth type %v unknown", *SSHAuth)
+			sshConfig.PasswordCallback = func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+				log.Infof("Connected (ssh-password): %v/%v", conn.User(), conn.RemoteAddr())
+				if conn.User() != *SSHAuthUser || !bytes.Equal(password, []byte(*SSHAuthPassword)) {
+					log.Warnf("Wrong user or password for %v/%v. Disconnecting.", conn.User(), conn.RemoteAddr())
+					return nil, errors.New("Wrong user or password")
+				}
+
+				return &ssh.Permissions{
+					CriticalOptions: make(map[string]string),
+					Extensions:      make(map[string]string),
+				}, nil
+			}
+		}
+		if *SSHAuthEnableKey {
+			var sshClientKeysToDecode string
+			if *SSHAuthKeysList == "" {
+				sshClientKeysToDecode = os.Getenv(*SSHAuthKeysList)
+			} else {
+				sshClientKeysToDecodeBytes, err := ioutil.ReadFile(*SSHAuthKeysList)
+				if err != nil {
+					log.Fatal(err)
+				}
+				sshClientKeysToDecode = string(sshClientKeysToDecodeBytes)
+			}
+			sshClientKeys := strings.Split(sshClientKeysToDecode, "\n")
+
+			sshConfig.PublicKeyCallback = func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+				keyBase64 := base64.RawStdEncoding.EncodeToString(key.Marshal())
+				if !*SSHAuthKeysBypass {
+					var noKeys bool
+					for i, k := range sshClientKeys {
+						if strings.HasPrefix(fmt.Sprintf("%v %v", key.Type(), keyBase64), k) {
+							log.Infof("Connected (ssh-key): %v/%v with key %v %v (matched with line %v)", 
+								conn.User(), conn.RemoteAddr(), key.Type(), keyBase64, i+1)
+							noKeys = true
+							break
+						}
+					}
+					if !noKeys {
+						log.Warnf("No key for %v/%v %v %v. Disconnecting.", conn.User(), conn.RemoteAddr(), key.Type(), keyBase64)
+					}
+				} else {
+					log.Infof("Connected (ssh-key): %v/%v with key %v %v", conn.User(), conn.RemoteAddr(), key.Type(), keyBase64)
+				}
+
+				return &ssh.Permissions{
+					CriticalOptions: make(map[string]string),
+					Extensions:      make(map[string]string),
+				}, nil
+			}
+		}
+		
+		if !(*SSHAuthEnableKey || *SSHAuthEnablePassword) {
+			sshConfig.NoClientAuth = true
 		}
 
 		sshConfig.AddHostKey(private)

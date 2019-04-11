@@ -182,16 +182,16 @@ Cloudflare's prefix list removes duplicates and entries that are not routed on t
 A simple comparison between software and devices.
 Implementations on versions may vary.
 
-| Device/software | Plaintext | TLS | SSH |
-| --------------- | --------- | --- | --- |
-| RTRdump         | Yes       | Yes | Yes |
-| Juniper         | Yes       | No  | No  |
-| Cisco           | Yes       | No  | Yes |
-| Alcatel         | Yes       | No  | No  |
-| Arista          | No        | No  | No  |
-| FRRouting       | Yes       | No  | Yes |
-| Bird            | Yes       | No  | Yes |
-| Quagga          | Yes       | No  | No  |
+| Device/software | Plaintext | TLS | SSH | Notes             |
+| --------------- | --------- | --- | --- | ----------------- |
+| RTRdump         | Yes       | Yes | Yes |                   |
+| Juniper         | Yes       | No  | No  |                   |
+| Cisco           | Yes       | No  | Yes | Only SSH password |
+| Alcatel         | Yes       | No  | No  |                   |
+| Arista          | No        | No  | No  |                   |
+| FRRouting       | Yes       | No  | Yes | Only SSH password |
+| Bird            | Yes       | No  | Yes | Only SSH key      |
+| Quagga          | Yes       | No  | No  |                   |
 
 ### Configure on Juniper
 

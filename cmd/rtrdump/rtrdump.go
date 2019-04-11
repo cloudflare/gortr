@@ -15,12 +15,14 @@ import (
 	"os"
 	"runtime"
 	"time"
+	"io/ioutil"
 )
 
 const (
-	AppVersion = "RTRdump 0.10.0"
+	AppVersion = "RTRdump 0.11.0"
 
 	ENV_SSH_PASSWORD = "RTR_SSH_PASSWORD"
+	ENV_SSH_KEY = "RTR_SSH_KEY"
 
 	METHOD_NONE = iota
 	METHOD_PASSWORD
@@ -36,9 +38,10 @@ var (
 
 	ValidateSSH     = flag.Bool("ssh.validate", false, "Validate SSH key")
 	SSHServerKey    = flag.String("ssh.validate.key", "", "SSH server key SHA256 to validate")
-	SSHAuth         = flag.String("ssh.method", "none", "Select SSH method (none or password)")
+	SSHAuth         = flag.String("ssh.method", "none", "Select SSH method (none, password or key)")
 	SSHAuthUser     = flag.String("ssh.auth.user", "rpki", "SSH user")
 	SSHAuthPassword = flag.String("ssh.auth.password", "", fmt.Sprintf("SSH password (if blank, will use envvar %v)", ENV_SSH_PASSWORD))
+	SSHAuthKey = flag.String("ssh.auth.key", "id_rsa", fmt.Sprintf("SSH key file (if blank, will use envvar %v)", ENV_SSH_KEY))
 
 	RefreshInterval = flag.Int("refresh", 600, "Refresh interval in seconds")
 
@@ -53,7 +56,7 @@ var (
 	authToId = map[string]int{
 		"none":     METHOD_NONE,
 		"password": METHOD_PASSWORD,
-		//"key":   METHOD_KEY,
+		"key":   METHOD_KEY,
 	}
 )
 
@@ -149,11 +152,29 @@ func main() {
 				password = os.Getenv(ENV_SSH_PASSWORD)
 			}
 			configSSH.Auth = append(configSSH.Auth, ssh.Password(password))
+		} else if authType == METHOD_KEY {
+			var keyBytes []byte
+			var err error
+			if *SSHAuthKey == "" {
+				keyBytesStr := os.Getenv(ENV_SSH_KEY)
+				keyBytes = []byte(keyBytesStr)
+			} else {
+				keyBytes, err = ioutil.ReadFile(*SSHAuthKey)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+			signer, err := ssh.ParsePrivateKey(keyBytes)
+			if err != nil {
+				log.Fatal(err)
+			}
+			configSSH.Auth = append(configSSH.Auth, ssh.PublicKeys(signer))
 		}
 	} else {
 		log.Fatalf("Auth type %v unknown", *SSHAuth)
 	}
 
+	log.Infof("Connecting with %v to %v", *ConnType, *Connect)
 	err := clientSession.Start(*Connect, typeToId[*ConnType], configTLS, configSSH)
 	if err != nil {
 		log.Fatal(err)
