@@ -33,6 +33,7 @@ const (
 	AppVersion = "GoRTR 0.11.0"
 
 	ENV_SSH_PASSWORD = "RTR_SSH_PASSWORD"
+	ENV_SSH_KEY = "GORTR_SSH_AUTHORIZEDKEYS"
 
 	METHOD_NONE = iota
 	METHOD_PASSWORD
@@ -494,7 +495,7 @@ func main() {
 		if *SSHAuthEnableKey {
 			var sshClientKeysToDecode string
 			if *SSHAuthKeysList == "" {
-				sshClientKeysToDecode = os.Getenv(*SSHAuthKeysList)
+				sshClientKeysToDecode = os.Getenv(ENV_SSH_KEY)
 			} else {
 				sshClientKeysToDecodeBytes, err := ioutil.ReadFile(*SSHAuthKeysList)
 				if err != nil {
