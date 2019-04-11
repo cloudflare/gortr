@@ -135,7 +135,7 @@ $ ./gortr -ssh.bind :8282 -ssh.key private.pem -bind ""
 
 By default, there is no authentication.
 
-At the moment, only no authentication and single user+password authentication are available:
+You can use password and key authentication:
 
 For example, to configure user **rpki** and password **rpki**:
 ```bash
