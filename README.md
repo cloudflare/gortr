@@ -50,16 +50,12 @@ $ go get github.com/cloudflare/gortr/cmd/gortr
 
 Copy `cf.pub` to your local directory if you want to use Cloudflare's signed JSON file.
 
-Create TLS certificates if you want to use the TLS feature:
-
+If you want to sign your list of prefixes, generate an ECDSA key.
+Then generate the public key to be used in GoRTR.
+You will have to setup your validator to use this key or have another
+tool to sign the JSON file before passing it to GoRTR.
 ```bash
 $ openssl ecparam -genkey -name prime256v1 -noout -outform pem > private.pem
-$ openssl req -new -x509 -key private.pem -out server.pem
-```
-
-If you want to sign your list of prefixes, generate an ECDSA key (similar to the first command above).
-Then generate the public key.
-```bash
 $ openssl ec -in private.pem -pubout -outform pem > public.pem
 ```
 
@@ -69,10 +65,51 @@ Once you have a binary, from either the `~/go/bin/` (if you did `go get` or `go 
 or the [Releases page](https://github.com/cloudflare/gortr/releases):
 
 ```bash
-$ ./gortr -bind 127.0.0.1:8282
+$ ./gortr -tls.bind 127.0.0.1:8282
 ```
 
 Make sure cf.pub is in the current directory. Or pass `-verify.key=path/to/cf.pub`
+
+### With SSL
+
+You can run GoRTR and listen for TLS connections only (just pass `-bind ""`).
+
+First, you will have to create a SSL certificate.
+
+```bash
+$ openssl ecparam -genkey -name prime256v1 -noout -outform pem > private.pem
+$ openssl req -new -x509 -key private.pem -out server.pem
+```
+
+Then, you have to run
+
+```bash
+$ ./gortr -ssh.bind :8282 -tls.key private.pem -tls.cert server.pem
+```
+
+### With SSH
+
+You can run GoRTR and listen for SSH connections only (just pass `-bind ""`).
+
+You will have to create an ECDSA key. You can use the following command:
+```bash
+$ openssl ecparam -genkey -name prime256v1 -noout -outform pem > private.pem
+```
+
+Then you can start:
+
+```bash
+$ ./gortr -ssh.bind :8282 -ssh.key private.pem -bind ""
+```
+
+By default, there is no authentication.
+
+At the moment, only no authentication and single user+password authentication are available:
+
+For example, to configure user **rpki** and password **rpki**:
+```bash
+$ ./gortr -ssh.bind :8282 -ssh.key private.pem -ssh.method password -ssh.auth.user rpki -ssh.auth.password rpki -bind ""
+```
 
 ## Debug the content
 
@@ -107,9 +144,28 @@ To use a data source that do not contains signatures or validity information, pa
 
 Cloudflare's prefix list removes duplicates and entries that are not routed on the Internet (>/24 IPv4 and >/48 IPv6).
 
+## Configurations
+
+### Compatibility matrix
+
+A simple comparison between software and devices.
+Implementations on versions may vary.
+
+| Device/software | Plaintext | TLS | SSH |
+| --------------- | --------- | --- | --- |
+| RTRdump         | Yes       | Yes | Yes |
+| Juniper         | Yes       | No  | No  |
+| Cisco           | Yes       | No  | Yes |
+| Alcatel         | Yes       | No  | No  |
+| Arista          | No        | No  | No  |
+| FRRouting       | Yes       | No  | Yes |
+| Bird            | Yes       | No  | No  |
+| Quagga          | Yes       | No  | No  |
+
 ### Configure on Juniper
 
-Configure a session to the RTR server
+Configure a session to the RTR server (assuming it runs on `192.168.1.100:8282`)
+
 ```
 louis@router> show configuration routing-options validation
 group TEST-RPKI {
@@ -118,7 +174,9 @@ group TEST-RPKI {
     }
 }
 ```
+
 Add policies to validate or invalidate prefixes
+
 ```
 louis@router> show configuration policy-options policy-statement STATEMENT-EXAMPLE
 term RPKI-TEST-VAL {
@@ -142,7 +200,9 @@ term RPKI-TEST-INV {
     }
 }
 ```
+
 Display status of the session to the RTR server.
+
 ```
 louis@router> show validation session 192.168.1.100 detail
 Session 192.168.1.100, State: up, Session index: 1
@@ -159,7 +219,9 @@ Session 192.168.1.100, State: up, Session index: 1
     IPv4 prefix count: 46478
     IPv6 prefix count: 8216
 ```
-Show content of the database
+
+Show content of the database (list the PDUs)
+
 ```
 louis@router> show validation database brief
 RV database for instance master
@@ -167,6 +229,88 @@ RV database for instance master
 Prefix                 Origin-AS Session                                 State   Mismatch
 1.0.0.0/24-24              13335 192.168.1.100                           valid
 1.1.1.0/24-24              13335 192.168.1.100                           valid
+```
+
+### Configure on Cisco
+
+You may want to use the option to do SSH-based connection.
+
+On Cisco, you can have only one RTR server per IP.
+
+To configure a session for `192.168.1.100:8282`:
+Replace `65001` by the configured ASN: 
+
+```
+router bgp 65001
+ rpki server 192.168.1.100 
+  transport tcp port 8282
+ !
+!
+```
+
+For an SSH session, you will also have to configure
+`router bgp 65001 rpki server 192.168.1.100 password xxx`
+where `xxx` is the password.
+Some experimentations showed you have to configure
+the username/password first, otherwise it will not accept the port.
+
+
+```
+router bgp 65001
+ rpki server 192.168.1.100 
+  username rpki
+  transport ssh port 8282
+ !
+!
+ssh client tcp-window-scale 14
+ssh timeout 120
+```
+
+The last two SSH statements solved an issue causing the 
+connection to break before receiving all the PDUs (TCP window full problem).
+
+To visualize the state of the session:
+
+```
+RP/0/RP0/CPU0:ios#sh bgp rpki server 192.168.1.100
+
+RPKI Cache-Server 192.168.1.100
+  Transport: SSH port 8282
+  Connect state: ESTAB
+  Conn attempts: 1
+  Total byte RX: 1726892
+  Total byte TX: 452
+  Last reset
+    Timest: Apr 05 01:19:32 (04:26:58 ago)
+    Reason: protocol error
+SSH information
+  Username: rpki
+  Password: *****
+  SSH PID: 18576
+RPKI-RTR protocol information
+  Serial number: 15
+  Cache nonce: 0x0
+  Protocol state: DATA_END
+  Refresh  time: 600 seconds
+  Response time: 30 seconds
+  Purge time: 60 seconds
+  Protocol exchange
+    ROAs announced:  67358 IPv4   11754 IPv6
+    ROAs withdrawn:     80 IPv4      34 IPv6
+    Error Reports :      0 sent       0 rcvd
+  Last protocol error
+    Reason: response timeout
+    Detail: response timeout while in DATA_START state
+```
+
+To visualize the accepted PDUs:
+
+```
+RP/0/RP0/CPU0:ios#sh bgp rpki table
+
+  Network               Maxlen          Origin-AS         Server
+  1.0.0.0/24            24              13335             192.168.1.100
+  1.1.1.0/24            24              13335             192.168.1.100
 ```
 
 ## License

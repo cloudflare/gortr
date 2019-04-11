@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
+	"golang.org/x/crypto/ssh"
+	"io"
 	"math/rand"
 	"net"
 	"sync"
@@ -104,6 +106,8 @@ type Server struct {
 	sessId      uint16
 	connected   int
 	maxconn     int
+
+	sshconfig *ssh.ServerConfig
 
 	handler        RTRServerEventHandler
 	simpleHandler  RTREventHandler
@@ -492,11 +496,89 @@ func (s *Server) Start(bind string) error {
 	if err != nil {
 		return err
 	}
-	s.loopTCP(tcplist)
+	s.loopTCP(tcplist, s.acceptClientTCP)
 	return nil
 }
 
-func (s *Server) loopTCP(tcplist net.Listener) {
+func (s *Server) acceptClientTCP(tcpconn net.Conn) error {
+	client := ClientFromConn(tcpconn, s, s)
+	client.log = s.log
+	if s.enforceVersion {
+		client.SetVersion(s.baseVersion)
+	}
+	client.SetIntervals(s.pduRefreshInterval, s.pduRetryInterval, s.pduExpireInterval)
+	go client.Start()
+	return nil
+}
+
+func (s *Server) acceptClientSSH(tcpconn net.Conn) error {
+	_, chans, reqs, err := ssh.NewServerConn(tcpconn, s.sshconfig)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		s.connected++
+		cont := true
+		for cont {
+			select {
+			case req := <-reqs:
+				if req != nil && req.WantReply {
+					req.Reply(false, nil)
+				} else if req == nil {
+					cont = false
+					break
+				}
+			case newChannel := <-chans:
+				if newChannel != nil && newChannel.ChannelType() != "session" {
+					newChannel.Reject(ssh.UnknownChannelType, "unknown channel type")
+					continue
+				} else if newChannel == nil {
+					cont = false
+					break
+				}
+				channel, requests, err := newChannel.Accept()
+				if err != nil {
+					if s.log != nil {
+						s.log.Errorf("Could not accept channel: %v", err)
+					}
+					cont = false
+					break
+				}
+				for req := range requests {
+					if req != nil && req.Type == "subsystem" && bytes.Equal(req.Payload, []byte{0, 0, 0, 8, 114, 112, 107, 105, 45, 114, 116, 114}) {
+						err := req.Reply(true, nil)
+						if err != nil {
+							if s.log != nil {
+								s.log.Errorf("Could not accept channel: %v", err)
+							}
+							cont = false
+							break
+						}
+						client := ClientFromConnSSH(tcpconn, channel, s, s)
+						client.log = s.log
+						if s.enforceVersion {
+							client.SetVersion(s.baseVersion)
+						}
+						client.SetIntervals(s.pduRefreshInterval, s.pduRetryInterval, s.pduExpireInterval)
+						client.Start()
+					} else {
+						cont = false
+						break
+					}
+
+				}
+			}
+		}
+		s.connected--
+		tcpconn.Close()
+	}()
+	return nil
+}
+
+type ClientCallback func(net.Conn) error
+
+func (s *Server) loopTCP(tcplist net.Listener, clientCallback ClientCallback) {
 	for {
 		tcpconn, _ := tcplist.Accept()
 
@@ -509,23 +591,32 @@ func (s *Server) loopTCP(tcplist net.Listener) {
 			if s.log != nil {
 				s.log.Infof("Accepted connection from %v (%v/%v)", tcpconn.RemoteAddr(), s.connected+1, s.maxconn)
 			}
-			client := ClientFromConn(tcpconn, s, s)
-			client.log = s.log
-			if s.enforceVersion {
-				client.SetVersion(s.baseVersion)
+			if clientCallback != nil {
+				err := clientCallback(tcpconn)
+				if err != nil && s.log != nil {
+					s.log.Errorf("Error with client %v: %v", tcpconn.RemoteAddr(), err)
+				}
 			}
-			client.SetIntervals(s.pduRefreshInterval, s.pduRetryInterval, s.pduExpireInterval)
-			go client.Start()
 		}
 	}
 }
 
-func (s *Server) StartTLS(bind string, config tls.Config) error {
-	tcplist, err := tls.Listen("tcp", bind, &config)
+func (s *Server) StartSSH(bind string, config *ssh.ServerConfig) error {
+	tcplist, err := net.Listen("tcp", bind)
 	if err != nil {
 		return err
 	}
-	s.loopTCP(tcplist)
+	s.sshconfig = config
+	s.loopTCP(tcplist, s.acceptClientSSH)
+	return nil
+}
+
+func (s *Server) StartTLS(bind string, config *tls.Config) error {
+	tcplist, err := tls.Listen("tcp", bind, config)
+	if err != nil {
+		return err
+	}
+	s.loopTCP(tcplist, s.acceptClientTCP)
 	return nil
 }
 
@@ -560,6 +651,8 @@ func (s *Server) SendPDU(pdu PDU) {
 func ClientFromConn(tcpconn net.Conn, handler RTRServerEventHandler, simpleHandler RTREventHandler) *Client {
 	return &Client{
 		tcpconn:       tcpconn,
+		rd:            tcpconn,
+		wr:            tcpconn,
 		handler:       handler,
 		simpleHandler: simpleHandler,
 		transmits:     make(chan PDU, 256),
@@ -567,11 +660,20 @@ func ClientFromConn(tcpconn net.Conn, handler RTRServerEventHandler, simpleHandl
 	}
 }
 
+func ClientFromConnSSH(tcpconn net.Conn, channel ssh.Channel, handler RTRServerEventHandler, simpleHandler RTREventHandler) *Client {
+	client := ClientFromConn(tcpconn, handler, simpleHandler)
+	client.rd = channel
+	client.wr = channel
+	return client
+}
+
 type Client struct {
 	connected     bool
 	version       uint8
 	versionset    bool
 	tcpconn       net.Conn
+	rd            io.Reader
+	wr            io.Writer
 	handler       RTRServerEventHandler
 	simpleHandler RTREventHandler
 	curserial     uint32
@@ -621,7 +723,7 @@ func (c *Client) SetDisableVersionCheck(disableCheck bool) {
 }
 
 func (c *Client) checkVersion(newversion uint8) {
-	if (!c.versionset || newversion == c.version) && (newversion == 1 || newversion == 0) {
+	if (!c.versionset || newversion == c.version) && (newversion == PROTOCOL_VERSION_1 || newversion == PROTOCOL_VERSION_0) {
 		c.SetVersion(newversion)
 	} else {
 		if c.log != nil {
@@ -649,7 +751,7 @@ func (c *Client) sendLoop() {
 	for c.connected {
 		select {
 		case pdu := <-c.transmits:
-			c.tcpconn.Write(pdu.Bytes())
+			c.wr.Write(pdu.Bytes())
 		case <-c.quit:
 			break
 		}
@@ -667,7 +769,7 @@ func (c *Client) Start() {
 	buf := make([]byte, 8000)
 	for c.connected {
 		// Remove this?
-		length, err := c.tcpconn.Read(buf)
+		length, err := c.rd.Read(buf)
 		if err != nil || length == 0 {
 			if c.log != nil {
 				c.log.Debugf("Error %v", err)
@@ -833,7 +935,7 @@ func (c *Client) SendPDU(pdu PDU) {
 func (c *Client) Disconnect() {
 	c.connected = false
 	if c.log != nil {
-		c.log.Debugf("Disconnecting client %v", c.String())
+		c.log.Infof("Disconnecting client %v", c.String())
 	}
 	if c.handler != nil {
 		c.handler.ClientDisconnected(c)
