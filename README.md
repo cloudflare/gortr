@@ -159,7 +159,7 @@ Implementations on versions may vary.
 | Alcatel         | Yes       | No  | No  |
 | Arista          | No        | No  | No  |
 | FRRouting       | Yes       | No  | Yes |
-| Bird            | Yes       | No  | No  |
+| Bird            | Yes       | No  | Yes |
 | Quagga          | Yes       | No  | No  |
 
 ### Configure on Juniper
