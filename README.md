@@ -42,6 +42,37 @@ $ git clone git@github.com:cloudflare/gortr.git && cd gortr
 $ go build cmd/gortr/gortr.go
 ```
 
+## With Docker
+
+If you do not want to use Docker, please go to the next section.
+
+If you have **Docker**, you can start GoRTR with `docker run -ti -p 8082:8082 cloudflare/gortr`.
+The containers contains Cloudflare's public signing key and an testing ECDSA private
+key for the SSH server.
+
+It will automatically download Cloudflare's prefix list and use the public key
+to validate it.
+
+You can now use any CLI attributes as long as they are after the image name:
+```bash
+$ docker run -ti -p 8083:8083 cloudflare/gortr -bind :8083
+```
+
+If you want to build your own image of GoRTR:
+```bash
+$ docker build -t mygortr -f Dockerfile.gortr.prod .
+$ docker run -ti mygortr -h
+```
+It will download the code from GitHub and compile it with Go and also generate an ECDSA key for SSH.
+
+Please note: if you plan to use SSH with Cloudflare's default container (`cloudflare/gortr`),
+replace the key `private.pem` since it is a testing key that has been published.
+An example is given below:
+
+```bash
+$ docker run -ti -v $PWD/mynewkey.pem:/private.pem cloudflare/gortr -ssh.bind :8083
+```
+
 ## Install it
 
 ```bash

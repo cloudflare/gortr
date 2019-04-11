@@ -11,6 +11,11 @@ COPY . .
 
 RUN go build cmd/gortr/gortr.go
 
+FROM alpine:latest as keygen
+
+RUN apk --update --no-cache add openssl
+RUN openssl ecparam -genkey -name prime256v1 -noout -outform pem > private.pem
+
 FROM alpine:latest
 ARG src_dir
 
@@ -19,4 +24,5 @@ RUN apk --update --no-cache add ca-certificates && \
 USER rtr
 
 COPY --from=builder ${src_dir}/gortr ${src_dir}/cmd/gortr/cf.pub /
+COPY --from=keygen /private.pem /private.pem
 ENTRYPOINT ["./gortr"]
