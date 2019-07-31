@@ -1,6 +1,42 @@
-language: go
-
-go:
-  - "1.10.x"
-  - "1.11.x"
-  - master
+jobs:
+  include:
+    # Test
+    - stage: test
+      os: linux
+      language: go
+      env:
+        GO111MODULE=on
+      script:
+        - make vet
+    # Compile
+    - stage: compile
+      os: linux
+      language: go
+      env:
+        GO111MODULE=on
+        BUILDINFOSDET=-travis
+      before_install:
+        - sudo apt-get update
+        - sudo apt-get install -y rpm ruby ruby-dev
+        - sudo gem install fpm
+      script:
+        - make dist-key
+        - GOOS=linux make build-gortr
+        - GOOS=darwin make build-gortr
+        - GOOS=windows EXTENSION=.exe make build-gortr
+        - make package-deb-gortr package-rpm-gortr
+      deploy:
+        provider: releases
+        api_key:
+          secure: V0/TVQR5gKR/NyHm7BNpyoFny4j1rsE6jSXcKhOo8AEXcvNoGoWys4PrBRFOMGIk9lKZ+yR74vY5qm7bY09DZh0cHPM/NINBQIq+btrc5l3FAia54gWSBa5GaQ+rex2i9xoK+3ueYsG7l4RQQ2CcIB3CkSf7JV9JNpUh5OgaYb12h/7pZW9ik3VJ7lAIGNoJ1KifbjIfh5aJ5yz186gbMJrskrEb9E/WFGdA4fV03eqrGdG+G6oP5QlpR4Xwhpis5+TA9UmJ4gwcEbR7HaMNifr5BQilyJSGpFeFkhGLeX65EFiqsHRgiOoEXR5NLPH5OVgyBPTZ6EN3RSF5GLnKEuAQ0lSIjjRtOPWf+8dEKZrNCvqGZk/5EA2HLItw2b8NeeZLO/i5RxxiXRhFDMLb1R5yo1Xm66M/s/7y5qSUZNc42Opf80M4VvkRMWVOiE4YfpFlnkzrI4FBRB24q7W7erNMm/CthPK6xbVmtZf6tVnUEpeY/wHuDaYihUNs7UW8C+xjiq22ufEU2v5j37IEia5Avpg8Cl+/HFy6H3MXpf3mr+KK/SM5VmMmERoIi5PKVp3xBb0RZuBGdY1sHIdYarDOiNXoXrcIpDiXuIHtN5q/TRfMIYk84qA1RPcfn1sMEn/LB7JCmBs4dUivw3oqPC4A2twnhucjv1A9sWGQY18=
+        file_glob: true
+        file: dist/*
+        skip_cleanup: true
+        on:
+          tags: true
+          repo: cloudflare/gortr
+    - dist: trusty
+      services:
+        - docker
+      script:
+        - make docker-gortr

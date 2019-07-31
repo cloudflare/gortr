@@ -1,0 +1,11 @@
+version: '3'
+services:
+  packager:
+    build: package
+    entrypoint: make
+    command:
+      - build-gortr
+      - package-deb-gortr
+      - package-rpm-gortr
+    volumes:
+      - ./:/work/

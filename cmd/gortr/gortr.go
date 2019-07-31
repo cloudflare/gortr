@@ -32,8 +32,6 @@ import (
 )
 
 const (
-	AppVersion = "GoRTR 0.11.0"
-
 	ENV_SSH_PASSWORD = "RTR_SSH_PASSWORD"
 	ENV_SSH_KEY      = "GORTR_SSH_AUTHORIZEDKEYS"
 
@@ -43,6 +41,10 @@ const (
 )
 
 var (
+	version    = ""
+	buildinfos = ""
+	AppVersion = "GoRTR " + version + " " + buildinfos
+
 	MetricsAddr = flag.String("metrics.addr", ":8080", "Metrics address")
 	MetricsPath = flag.String("metrics.path", "/metrics", "Metrics path")
 	RTRVersion  = flag.Int("protocol", 1, "RTR protocol version")
