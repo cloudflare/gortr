@@ -22,9 +22,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"encoding/base64"
 )
@@ -300,17 +302,23 @@ func (s *state) updateFile(file string) error {
 
 func (s *state) routineUpdate(file string, interval int) {
 	log.Debugf("Starting refresh routine (file: %v, interval: %vs)", file, interval)
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGHUP)
 	for {
+		delay := time.NewTimer(time.Duration(interval) * time.Second)
 		select {
-		case <-time.After(time.Duration(interval) * time.Second):
-			err := s.updateFile(file)
-			if err != nil {
-				switch err.(type) {
-				case IdenticalFile:
-					log.Info(err)
-				default:
-					log.Errorf("Error updating: %v", err)
-				}
+		case <-delay.C:
+		case <-signals:
+			log.Debug("Received HUP signal")
+		}
+		delay.Stop()
+		err := s.updateFile(file)
+		if err != nil {
+			switch err.(type) {
+			case IdenticalFile:
+				log.Info(err)
+			default:
+				log.Errorf("Error updating: %v", err)
 			}
 		}
 	}
