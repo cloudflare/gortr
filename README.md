@@ -75,11 +75,29 @@ $ docker run -ti -v $PWD/mynewkey.pem:/private.pem cloudflare/gortr -ssh.bind :8
 
 ## Install it
 
+There are a few solutions to install it.
+
+Go can directly fetch it from the source
+
 ```bash
 $ go get github.com/cloudflare/gortr/cmd/gortr
 ```
 
 Copy `cf.pub` to your local directory if you want to use Cloudflare's signed JSON file.
+
+You can use the Makefile (by default it will be compiled for Linux, add `GOOS=darwin` for Mac)
+
+```bash
+$ make dist-key build-gortr
+```
+
+The compiled file will be in `/dist`.
+
+Or you can use a package (or binary) file from the [Releases page](https://github.com/cloudflare/gortr/releases):
+```bash
+$ sudo dpkg -i gortr[...].deb
+$ sudo systemctl start gortr
+```
 
 If you want to sign your list of prefixes, generate an ECDSA key.
 Then generate the public key to be used in GoRTR.
@@ -92,14 +110,23 @@ $ openssl ec -in private.pem -pubout -outform pem > public.pem
 
 ## Run it
 
-Once you have a binary, from either the `~/go/bin/` (if you did `go get` or `go build`)
-or the [Releases page](https://github.com/cloudflare/gortr/releases):
+Once you have a binary:
 
 ```bash
 $ ./gortr -tls.bind 127.0.0.1:8282
 ```
 
 Make sure cf.pub is in the current directory. Or pass `-verify.key=path/to/cf.pub`
+
+## Package it
+
+If you want to package it (deb/rpm), you can use the pre-built docker-compose file.
+
+```bash
+$ docker-compose -f docker-compose-pkg.yml up
+```
+
+You can find both files in the `dist/` directory.
 
 ### With SSL
 
