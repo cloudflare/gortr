@@ -131,6 +131,17 @@ $ docker-compose -f docker-compose-pkg.yml up
 
 You can find both files in the `dist/` directory.
 
+### Usage with a proxy
+
+This was tested with a basic Squid proxy. The `User-Agent` header is passed
+in the CONNECT.
+
+You have to export the following two variables in order for GoRTR to use the proxy.
+```
+export HTTP_PROXY=schema://host:port
+export HTTPS_PROXY=schema://host:port
+```
+
 ### With SSL
 
 You can run GoRTR and listen for TLS connections only (just pass `-bind ""`).

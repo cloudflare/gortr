@@ -136,13 +136,39 @@ func fetchFile(file string, ua string) ([]byte, error) {
 	var err error
 	if len(file) > 8 && (file[0:7] == "http://" || file[0:8] == "https://") {
 
-		client := &http.Client{}
+		// Copying base of DefaultTransport from https://golang.org/src/net/http/transport.go
+		// There is a proposal for a Clone of
+		tr := &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			ProxyConnectHeader:    map[string][]string{},
+		}
+		// Keep User-Agent in proxy request
+		tr.ProxyConnectHeader.Set("User-Agent", ua)
+
+		client := &http.Client{Transport: tr}
 		req, err := http.NewRequest("GET", file, nil)
 		req.Header.Set("User-Agent", ua)
+		req.Header.Set("Accept", "text/json")
+
+		proxyurl, err := http.ProxyFromEnvironment(req)
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Set("Accept", "text/json")
+		proxyreq := http.ProxyURL(proxyurl)
+		tr.Proxy = proxyreq
+
+		if err != nil {
+			return nil, err
+		}
 
 		fhttp, err := client.Do(req)
 		if err != nil {
