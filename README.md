@@ -17,6 +17,7 @@ _This software comes with no warranty._
 * Prometheus metrics
 * Lightweight
 * TLS
+* SSH
 * Signature verification and expiration control
 
 ## Features of the extractor
@@ -24,6 +25,7 @@ _This software comes with no warranty._
 * Generate a list of prefixes sent via RTR (similar to Cloudflare JSON input, or RIPE RPKI Validator)
 * Lightweight
 * TLS
+* SSH
 
 ## Features of the API
 
@@ -31,6 +33,7 @@ _This software comes with no warranty._
 * Protocol v1 of [RFC8210](https://tools.ietf.org/html/rfc8210)
 * Event-driven API
 * TLS
+* SSH
 
 ## To start developing
 
