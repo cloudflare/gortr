@@ -11,18 +11,18 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	"runtime"
 	"time"
-	"io/ioutil"
 )
 
 const (
 	AppVersion = "RTRdump 0.11.0"
 
 	ENV_SSH_PASSWORD = "RTR_SSH_PASSWORD"
-	ENV_SSH_KEY = "RTR_SSH_KEY"
+	ENV_SSH_KEY      = "RTR_SSH_KEY"
 
 	METHOD_NONE = iota
 	METHOD_PASSWORD
@@ -41,7 +41,7 @@ var (
 	SSHAuth         = flag.String("ssh.method", "none", "Select SSH method (none, password or key)")
 	SSHAuthUser     = flag.String("ssh.auth.user", "rpki", "SSH user")
 	SSHAuthPassword = flag.String("ssh.auth.password", "", fmt.Sprintf("SSH password (if blank, will use envvar %v)", ENV_SSH_PASSWORD))
-	SSHAuthKey = flag.String("ssh.auth.key", "id_rsa", fmt.Sprintf("SSH key file (if blank, will use envvar %v)", ENV_SSH_KEY))
+	SSHAuthKey      = flag.String("ssh.auth.key", "id_rsa", fmt.Sprintf("SSH key file (if blank, will use envvar %v)", ENV_SSH_KEY))
 
 	RefreshInterval = flag.Int("refresh", 600, "Refresh interval in seconds")
 
@@ -56,7 +56,7 @@ var (
 	authToId = map[string]int{
 		"none":     METHOD_NONE,
 		"password": METHOD_PASSWORD,
-		"key":   METHOD_KEY,
+		"key":      METHOD_KEY,
 	}
 )
 

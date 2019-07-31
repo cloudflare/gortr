@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -28,14 +29,13 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"encoding/base64"
 )
 
 const (
 	AppVersion = "GoRTR 0.11.0"
 
 	ENV_SSH_PASSWORD = "RTR_SSH_PASSWORD"
-	ENV_SSH_KEY = "GORTR_SSH_AUTHORIZEDKEYS"
+	ENV_SSH_KEY      = "GORTR_SSH_AUTHORIZEDKEYS"
 
 	METHOD_NONE = iota
 	METHOD_PASSWORD
@@ -53,16 +53,16 @@ var (
 	TLSCert = flag.String("tls.cert", "", "Certificate path")
 	TLSKey  = flag.String("tls.key", "", "Private key path")
 
-	BindSSH         = flag.String("ssh.bind", "", "Bind address for SSH")
-	SSHKey          = flag.String("ssh.key", "private.pem", "SSH host key")
+	BindSSH = flag.String("ssh.bind", "", "Bind address for SSH")
+	SSHKey  = flag.String("ssh.key", "private.pem", "SSH host key")
 
-	SSHAuthEnablePassword   = flag.Bool("ssh.method.password", false, "Enable password auth")
-	SSHAuthUser     = flag.String("ssh.auth.user", "rpki", "SSH user")
-	SSHAuthPassword = flag.String("ssh.auth.password", "", "SSH password (if blank, will use envvar GORTR_SSH_PASSWORD)")
+	SSHAuthEnablePassword = flag.Bool("ssh.method.password", false, "Enable password auth")
+	SSHAuthUser           = flag.String("ssh.auth.user", "rpki", "SSH user")
+	SSHAuthPassword       = flag.String("ssh.auth.password", "", "SSH password (if blank, will use envvar GORTR_SSH_PASSWORD)")
 
-	SSHAuthEnableKey   = flag.Bool("ssh.method.key", false, "Enable key auth")
+	SSHAuthEnableKey  = flag.Bool("ssh.method.key", false, "Enable key auth")
 	SSHAuthKeysBypass = flag.Bool("ssh.auth.key.bypass", false, "Accept any SSH key")
-	SSHAuthKeysList = flag.String("ssh.auth.key.file", "", "Authorized SSH key file (if blank, will use envvar GORTR_SSH_AUTHORIZEDKEYS")
+	SSHAuthKeysList   = flag.String("ssh.auth.key.file", "", "Authorized SSH key file (if blank, will use envvar GORTR_SSH_AUTHORIZEDKEYS")
 
 	TimeCheck = flag.Bool("checktime", true, "Check if file is still valid")
 	Verify    = flag.Bool("verify", true, "Check signature using provided public key")
@@ -519,7 +519,7 @@ func main() {
 					var noKeys bool
 					for i, k := range sshClientKeys {
 						if strings.HasPrefix(fmt.Sprintf("%v %v", key.Type(), keyBase64), k) {
-							log.Infof("Connected (ssh-key): %v/%v with key %v %v (matched with line %v)", 
+							log.Infof("Connected (ssh-key): %v/%v with key %v %v (matched with line %v)",
 								conn.User(), conn.RemoteAddr(), key.Type(), keyBase64, i+1)
 							noKeys = true
 							break
@@ -538,7 +538,7 @@ func main() {
 				}, nil
 			}
 		}
-		
+
 		if !(*SSHAuthEnableKey || *SSHAuthEnablePassword) {
 			sshConfig.NoClientAuth = true
 		}
