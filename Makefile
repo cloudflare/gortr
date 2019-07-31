@@ -4,6 +4,7 @@ GOOS ?= linux
 ARCH ?= $(shell uname -m)
 BUILDINFOSDET ?= 
 
+DOCKER_REPO   := cloudflare/
 GORTR_NAME    := gortr
 GORTR_VERSION := $(shell git describe --tags $(git rev-list --tags --max-count=1))
 VERSION_PKG   := $(shell echo $(GORTR_VERSION) | sed 's/^v//g')
@@ -38,7 +39,7 @@ build-gortr: prepare
 
 .PHONY: docker-gortr
 docker-gortr:
-	docker build -t $(GORTR_NAME):$(GORTR_VERSION) -f Dockerfile.gortr .
+	docker build -t $(DOCKER_REPO)$(GORTR_NAME):$(GORTR_VERSION) --build-arg LDFLAGS=$(LDFLAGS) -f Dockerfile.gortr .
 
 .PHONY: package-deb-gortr
 package-deb-gortr: prepare

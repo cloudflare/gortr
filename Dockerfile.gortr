@@ -2,6 +2,7 @@ ARG src_dir="/gortr"
 
 FROM golang:alpine as builder
 ARG src_dir
+ARG LDFLAGS=""
 
 RUN apk --update --no-cache add git && \
     mkdir -p ${src_dir}
@@ -9,7 +10,7 @@ RUN apk --update --no-cache add git && \
 WORKDIR ${src_dir}
 COPY . .
 
-RUN go build cmd/gortr/gortr.go
+RUN go build -ldflags "${LDFLAGS}" cmd/gortr/gortr.go
 
 FROM alpine:latest as keygen
 
