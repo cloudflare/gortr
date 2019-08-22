@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	ENV_SSH_PASSWORD = "RTR_SSH_PASSWORD"
+	ENV_SSH_PASSWORD = "GORTR_SSH_PASSWORD"
 	ENV_SSH_KEY      = "GORTR_SSH_AUTHORIZEDKEYS"
 
 	METHOD_NONE = iota
@@ -60,11 +60,11 @@ var (
 
 	SSHAuthEnablePassword = flag.Bool("ssh.method.password", false, "Enable password auth")
 	SSHAuthUser           = flag.String("ssh.auth.user", "rpki", "SSH user")
-	SSHAuthPassword       = flag.String("ssh.auth.password", "", "SSH password (if blank, will use envvar GORTR_SSH_PASSWORD)")
+	SSHAuthPassword       = flag.String("ssh.auth.password", "", fmt.Sprintf("SSH password (if blank, will use envvar %v)", ENV_SSH_PASSWORD))
 
 	SSHAuthEnableKey  = flag.Bool("ssh.method.key", false, "Enable key auth")
 	SSHAuthKeysBypass = flag.Bool("ssh.auth.key.bypass", false, "Accept any SSH key")
-	SSHAuthKeysList   = flag.String("ssh.auth.key.file", "", "Authorized SSH key file (if blank, will use envvar GORTR_SSH_AUTHORIZEDKEYS")
+	SSHAuthKeysList   = flag.String("ssh.auth.key.file", "", fmt.Sprintf("Authorized SSH key file (if blank, will use envvar %v", ENV_SSH_KEY))
 
 	TimeCheck = flag.Bool("checktime", true, "Check if file is still valid")
 	Verify    = flag.Bool("verify", true, "Check signature using provided public key")
