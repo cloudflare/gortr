@@ -219,6 +219,8 @@ Use your own validator, as long as the JSON source follows the following schema:
 To use a data source that do not contains signatures or validity information, pass:
 `-verify=false -checktime=false`
 
+**[Note: for boolean flags, it requires the equal sign](https://golang.org/pkg/flag/#hdr-Command_line_flag_syntax)**
+
 Cloudflare's prefix list removes duplicates and entries that are not routed on the Internet (>/24 IPv4 and >/48 IPv6).
 
 ## Configurations

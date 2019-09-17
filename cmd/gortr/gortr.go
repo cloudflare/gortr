@@ -67,7 +67,7 @@ var (
 	SSHAuthKeysList   = flag.String("ssh.auth.key.file", "", fmt.Sprintf("Authorized SSH key file (if blank, will use envvar %v", ENV_SSH_KEY))
 
 	TimeCheck = flag.Bool("checktime", true, "Check if file is still valid")
-	Verify    = flag.Bool("verify", true, "Check signature using provided public key")
+	Verify    = flag.Bool("verify", true, "Check signature using provided public key (disable by passing -verify=false)")
 	PublicKey = flag.String("verify.key", "cf.pub", "Public key path (PEM file)")
 
 	CacheBin        = flag.String("cache", "https://rpki.cloudflare.com/rpki.json", "URL of the cached JSON data")
