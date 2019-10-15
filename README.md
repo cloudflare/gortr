@@ -233,11 +233,12 @@ Implementations on versions may vary.
 | Device/software | Plaintext | TLS | SSH | Notes             |
 | --------------- | --------- | --- | --- | ----------------- |
 | RTRdump         | Yes       | Yes | Yes |                   |
+| RTRlib          | Yes       | No  | Yes | Only SSH key      |
 | Juniper         | Yes       | No  | No  |                   |
 | Cisco           | Yes       | No  | Yes | Only SSH password |
 | Alcatel         | Yes       | No  | No  |                   |
 | Arista          | No        | No  | No  |                   |
-| FRRouting       | Yes       | No  | Yes | Only SSH password |
+| FRRouting       | Yes       | No  | Yes | Only SSH key      |
 | Bird            | Yes       | No  | Yes | Only SSH key      |
 | Quagga          | Yes       | No  | No  |                   |
 
