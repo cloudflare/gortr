@@ -233,7 +233,7 @@ Implementations on versions may vary.
 | Device/software | Plaintext | TLS | SSH | Notes             |
 | --------------- | --------- | --- | --- | ----------------- |
 | RTRdump         | Yes       | Yes | Yes |                   |
-| RTRlib          | Yes       | no  | Yes | Only SSH key      |
+| RTRlib          | Yes       | No  | Yes | Only SSH key      |
 | Juniper         | Yes       | No  | No  |                   |
 | Cisco           | Yes       | No  | Yes | Only SSH password |
 | Alcatel         | Yes       | No  | No  |                   |
