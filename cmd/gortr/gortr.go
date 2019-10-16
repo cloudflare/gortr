@@ -546,6 +546,9 @@ func main() {
 				if !*SSHAuthKeysBypass {
 					var noKeys bool
 					for i, k := range sshClientKeys {
+						if k == "" {
+							continue
+						}
 						if strings.HasPrefix(fmt.Sprintf("%v %v", key.Type(), keyBase64), k) {
 							log.Infof("Connected (ssh-key): %v/%v with key %v %v (matched with line %v)",
 								conn.User(), conn.RemoteAddr(), key.Type(), keyBase64, i+1)
@@ -555,6 +558,7 @@ func main() {
 					}
 					if !noKeys {
 						log.Warnf("No key for %v/%v %v %v. Disconnecting.", conn.User(), conn.RemoteAddr(), key.Type(), keyBase64)
+						return nil, errors.New("Key not found")
 					}
 				} else {
 					log.Infof("Connected (ssh-key): %v/%v with key %v %v", conn.User(), conn.RemoteAddr(), key.Type(), keyBase64)
