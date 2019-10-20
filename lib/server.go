@@ -335,7 +335,6 @@ func (s *Server) generateSerial() uint32 {
 
 func (s *Server) AddROAs(roas []ROA) {
 	s.roalock.RLock()
-	curDiff := make([]ROA, 0)
 
 	roaCurrent := s.roaCurrent
 
@@ -343,10 +342,8 @@ func (s *Server) AddROAs(roas []ROA) {
 	if s.log != nil {
 		s.log.Debugf("Computed diff: added (%v), removed (%v), unchanged (%v)", added, removed, unchanged)
 	}
-	curDiff = append(added, removed...)
-	s.roalock.RUnlock()
 
-	s.AddROAsDiff(curDiff)
+	s.AddROAsDiff(added, removed, unchanged)
 }
 
 func (s *Server) addSerial(serial uint32) []uint32 {
@@ -360,13 +357,14 @@ func (s *Server) addSerial(serial uint32) []uint32 {
 	return removed
 }
 
-func (s *Server) AddROAsDiff(diff []ROA) {
-	s.roalock.RLock()
+func (s *Server) AddROAsDiff(roas_added []ROA, roas_removed []ROA, roas_unchanged []ROA) {
+	newRoaCurrent := append(roas_added, roas_unchanged...)
+	diff := append(roas_added, roas_removed...)
+
 	nextDiff := make([][]ROA, len(s.roaListDiff))
 	for i, prevRoas := range s.roaListDiff {
 		nextDiff[i] = ApplyDiff(diff, prevRoas)
 	}
-	newRoaCurrent := ApplyDiff(diff, s.roaCurrent)
 	curserial, valid := s.getCurrentSerial()
 	s.roalock.RUnlock()
 
