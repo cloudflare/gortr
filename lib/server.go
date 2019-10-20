@@ -191,41 +191,9 @@ func NewServer(configuration ServerConfiguration, handler RTRServerEventHandler,
 }
 
 func ComputeDiff(newRoas []ROA, prevRoas []ROA) ([]ROA, []ROA, []ROA) {
-	added := make([]ROA, 0)
-	removed := make([]ROA, 0)
-	unchanged := make([]ROA, 0)
-
-	for _, roa := range newRoas {
-		var exists bool
-		for _, croa := range prevRoas {
-			if roa.Equals(croa) {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			rcopy := roa.Copy()
-			rcopy.Flags = 1
-			added = append(added, rcopy)
-		}
-	}
-	for _, roa := range prevRoas {
-		var exists bool
-		for _, croa := range newRoas {
-			if roa.Equals(croa) {
-				rcopy := roa.Copy()
-				unchanged = append(unchanged, rcopy)
-
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			rcopy := roa.Copy()
-			rcopy.Flags = 0
-			removed = append(removed, rcopy)
-		}
-	}
+	added := SetDifference(newRoas, prevRoas, int8(1))
+	removed := SetDifference(prevRoas, newRoas, int8(0))
+	unchanged := SetIntersection(newRoas, prevRoas)
 
 	return added, removed, unchanged
 }
@@ -830,6 +798,10 @@ type ROA struct {
 	Flags  uint8
 }
 
+func (roa ROA) HashKey() string {
+	return fmt.Sprintf("%s-%s-%s-%s", roa.MaxLen, roa.ASN, roa.Prefix.Mask, roa.Prefix.IP)
+}
+
 func (r ROA) String() string {
 	return fmt.Sprintf("ROA %v -> /%v, AS%v, Flags: %v", r.Prefix.String(), r.MaxLen, r.ASN, r.Flags)
 }
@@ -945,4 +917,33 @@ func (c *Client) Disconnect() {
 	}
 
 	c.tcpconn.Close()
+}
+
+func SetOperation(a []ROA, b []ROA, set_difference bool, flag int8) []ROA {
+	set := make([]ROA, 0)
+	hash := make(map[string]bool)
+
+	for _, e := range b {
+		hash[e.HashKey()] = true
+	}
+
+	for _, e := range a {
+		_, found := hash[e.HashKey()]
+		if (set_difference && !found) || (!set_difference && found) {
+			roa := e.Copy()
+			if flag != -1 {
+				roa.Flags = uint8(flag)
+			}
+			set = append(set, roa)
+		}
+	}
+
+	return set
+}
+
+func SetIntersection(a []ROA, b []ROA) []ROA {
+	return SetOperation(a, b, false, int8(-1))
+}
+func SetDifference(a []ROA, b []ROA, flag int8) []ROA {
+	return SetOperation(a, b, true, flag)
 }
