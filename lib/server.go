@@ -190,19 +190,28 @@ func NewServer(configuration ServerConfiguration, handler RTRServerEventHandler,
 	}
 }
 
+func (roa ROA) HashKey() string {
+	return fmt.Sprintf("%v-%v-%v", roa.Prefix.String(), roa.MaxLen, roa.ASN)
+}
+
+func ConvertROAListToMap(roas []ROA) map[string]ROA {
+	roaMap := make(map[string]ROA, len(roas))
+	for _, v := range roas {
+		roaMap[v.HashKey()] = v
+	}
+	return roaMap
+}
+
 func ComputeDiff(newRoas []ROA, prevRoas []ROA) ([]ROA, []ROA, []ROA) {
 	added := make([]ROA, 0)
 	removed := make([]ROA, 0)
 	unchanged := make([]ROA, 0)
 
+	newRoasMap := ConvertROAListToMap(newRoas)
+	prevRoasMap := ConvertROAListToMap(prevRoas)
+
 	for _, roa := range newRoas {
-		var exists bool
-		for _, croa := range prevRoas {
-			if roa.Equals(croa) {
-				exists = true
-				break
-			}
-		}
+		_, exists := prevRoasMap[roa.HashKey()]
 		if !exists {
 			rcopy := roa.Copy()
 			rcopy.Flags = 1
@@ -210,20 +219,14 @@ func ComputeDiff(newRoas []ROA, prevRoas []ROA) ([]ROA, []ROA, []ROA) {
 		}
 	}
 	for _, roa := range prevRoas {
-		var exists bool
-		for _, croa := range newRoas {
-			if roa.Equals(croa) {
-				rcopy := roa.Copy()
-				unchanged = append(unchanged, rcopy)
-
-				exists = true
-				break
-			}
-		}
+		_, exists := newRoasMap[roa.HashKey()]
 		if !exists {
 			rcopy := roa.Copy()
 			rcopy.Flags = 0
 			removed = append(removed, rcopy)
+		} else {
+			rcopy := roa.Copy()
+			unchanged = append(unchanged, rcopy)
 		}
 	}
 
@@ -232,15 +235,11 @@ func ComputeDiff(newRoas []ROA, prevRoas []ROA) ([]ROA, []ROA, []ROA) {
 
 func ApplyDiff(diff []ROA, prevRoas []ROA) []ROA {
 	newroas := make([]ROA, 0)
+	diffMap := ConvertROAListToMap(diff)
+	prevRoasMap := ConvertROAListToMap(prevRoas)
 
 	for _, roa := range prevRoas {
-		var exists bool
-		for _, croa := range diff {
-			if roa.Equals(croa) {
-				exists = true
-				break
-			}
-		}
+		_, exists := diffMap[roa.HashKey()]
 		if !exists {
 			rcopy := roa.Copy()
 			newroas = append(newroas, rcopy)
@@ -251,20 +250,15 @@ func ApplyDiff(diff []ROA, prevRoas []ROA) []ROA {
 			rcopy := roa.Copy()
 			newroas = append(newroas, rcopy)
 		} else if roa.Flags == FLAG_REMOVED {
-			var exists bool
-			for _, croa := range prevRoas {
-				if roa.Equals(croa) {
-					if croa.Flags == FLAG_REMOVED {
-						rcopy := roa.Copy()
-						newroas = append(newroas, rcopy)
-					}
-					exists = true
-					break
-				}
-			}
+			croa, exists := prevRoasMap[roa.HashKey()]
 			if !exists {
 				rcopy := roa.Copy()
 				newroas = append(newroas, rcopy)
+			} else {
+				if croa.Flags == FLAG_REMOVED {
+					rcopy := roa.Copy()
+					newroas = append(newroas, rcopy)
+				}
 			}
 		}
 

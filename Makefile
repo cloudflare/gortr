@@ -21,6 +21,10 @@ OUTPUT_GORTR := $(DIST_DIR)gortr-$(GORTR_VERSION)-$(GOOS)-$(ARCH)$(EXTENSION)
 vet:
 	go vet cmd/gortr/gortr.go
 
+.PHONY: test
+test:
+	go test -v github.com/cloudflare/gortr/lib
+
 .PHONY: prepare
 prepare:
 	mkdir -p $(DIST_DIR)
