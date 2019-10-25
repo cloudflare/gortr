@@ -110,6 +110,10 @@ func (roa *ROAJson) GetPrefix() *net.IPNet {
 	return prefix
 }
 
+func (roa *ROAJson) GetMaxLen() int {
+	return int(roa.Length)
+}
+
 func (roa *ROAJson) String() string {
 	return fmt.Sprintf("%v/%v/%v", roa.Prefix, roa.Length, roa.ASN)
 }
