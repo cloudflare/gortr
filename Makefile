@@ -24,6 +24,7 @@ vet:
 .PHONY: test
 test:
 	go test -v github.com/cloudflare/gortr/lib
+	go test -v github.com/cloudflare/gortr/prefixfile
 
 .PHONY: prepare
 prepare:

@@ -188,11 +188,71 @@ And to configure a bypass for every SSH key:
 $ ./gortr -ssh.bind :8282 -ssh.key private.pem -ssh.method.key=true -ssh.auth.key.bypass=true -bind ""
 ```
 
+## Configure filters and overrides (SLURM)
+
+GoRTR supports SLURM configuration files ([RFC8416](https://tools.ietf.org/html/rfc8416)).
+
+Create a json file (`slurm.json`):
+
+```
+{
+    "slurmVersion": 1,
+    "validationOutputFilters": {
+     "prefixFilters": [
+       {
+        "prefix": "10.0.0.0/8",
+        "comment": "Everything inside will be removed"
+       },
+       {
+        "asn": 65001,
+       },
+       {
+        "asn": 65002,
+        "prefix": "192.168.0.0/24",
+       },
+     ],
+     "bgpsecFilters": []
+    },
+    "locallyAddedAssertions": {
+     "prefixAssertions": [
+       {
+        "asn": 65001,
+        "prefix": "2001:db8::/32",
+        "maxPrefixLength": 48,
+        "comment": "Manual add"
+       }
+     ],
+     "bgpsecAssertions": [
+     ]
+    }
+  }
+```
+
+When starting GoRTR, add the `-slurm ./slurm.json` argument.
+
+The log should display something similar to the following:
+
+```
+INFO[0001] Slurm filtering: 112214 kept, 159 removed, 1 asserted
+INFO[0002] New update (112215 uniques, 112215 total prefixes).
+```
+
+For instance, if the original JSON fetched contains the ROA: `10.0.0.0/24-24 AS65001`,
+it will be removed.
+
+The JSON exported by GoRTR will contain the overrides and the file can be signed again.
+Others GoRTR can be configured to fetch the ROAs from the filtering GoRTR:
+the operator manages one SLURM file on a leader GoRTR.
+
 ## Debug the content
+
+You can check the content provided over RTR with rtrdump tool
 
 ```bash
 $ ./rtrdump -connect 127.0.0.1:8282 -file debug.json
 ```
+
+You can also fetch the re-generated JSON from the `-export.path` endpoint (default: `http://localhost:8080/rpki.json`)
 
 ### Data sources
 
