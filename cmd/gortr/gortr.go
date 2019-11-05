@@ -26,6 +26,7 @@ import (
 	"os/signal"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -46,7 +47,11 @@ var (
 
 	MetricsAddr = flag.String("metrics.addr", ":8080", "Metrics address")
 	MetricsPath = flag.String("metrics.path", "/metrics", "Metrics path")
-	RTRVersion  = flag.Int("protocol", 1, "RTR protocol version")
+
+	ExportPath = flag.String("export.path", "/rpki.json", "Export path")
+	ExportSign = flag.String("export.sign", "", "Sign export with key")
+
+	RTRVersion = flag.Int("protocol", 1, "RTR protocol version")
 
 	Bind = flag.String("bind", ":8282", "Bind address")
 
@@ -74,6 +79,9 @@ var (
 	RefreshInterval = flag.Int("refresh", 600, "Refresh interval in seconds")
 	MaxConn         = flag.Int("maxconn", 0, "Max simultaneous connections (0 to disable limit)")
 	SendNotifs      = flag.Bool("notifications", true, "Send notifications to clients")
+
+	Slurm        = flag.String("slurm", "", "Slurm configuration file (filters and assertions)")
+	SlurmRefresh = flag.Bool("slurm.refresh", true, "Refresh along the cache")
 
 	LogLevel = flag.String("loglevel", "info", "Log level")
 	Version  = flag.Bool("version", false, "Print version")
@@ -201,7 +209,7 @@ func decodeJSON(data []byte) (*prefixfile.ROAList, error) {
 	return &roalistjson, err
 }
 
-func processData(roalistjson *prefixfile.ROAList) ([]rtr.ROA, int, int, int) {
+func processData(roalistjson []prefixfile.ROAJson) ([]rtr.ROA, int, int, int) {
 	filterDuplicates := make(map[string]bool)
 
 	roalist := make([]rtr.ROA, 0)
@@ -209,7 +217,7 @@ func processData(roalistjson *prefixfile.ROAList) ([]rtr.ROA, int, int, int) {
 	var count int
 	var countv4 int
 	var countv6 int
-	for _, v := range roalistjson.Data {
+	for _, v := range roalistjson {
 		prefix, err := v.GetPrefix2()
 		if err != nil {
 			log.Error(err)
@@ -300,7 +308,37 @@ func (s *state) updateFile(file string) error {
 		log.Debugf("Signature verified")
 	}
 
-	roas, count, countv4, countv6 := processData(roalistjson)
+	roasjson := roalistjson.Data
+	if s.slurm != nil {
+		kept, removed := s.slurm.FilterOnROAs(roasjson)
+		asserted := s.slurm.AssertROAs()
+		log.Infof("Slurm filtering: %v kept, %v removed, %v asserted", len(kept), len(removed), len(asserted))
+		roasjson = append(kept, asserted...)
+	}
+	s.lockJson.Lock()
+	s.exported = prefixfile.ROAList{
+		Metadata: prefixfile.MetaData{
+			Counts:    len(roasjson),
+			Generated: roalistjson.Metadata.Generated,
+			Valid:     roalistjson.Metadata.Valid,
+			/*Signature:     roalistjson.Metadata.Signature,
+			SignatureDate: roalistjson.Metadata.SignatureDate,*/
+		},
+		Data: roasjson,
+	}
+
+	if s.key != nil {
+		signdate, sign, err := s.exported.Sign(s.key)
+		if err != nil {
+			log.Error(err)
+		}
+		s.exported.Metadata.Signature = sign
+		s.exported.Metadata.SignatureDate = signdate
+	}
+
+	s.lockJson.Unlock()
+
+	roas, count, countv4, countv6 := processData(roasjson)
 	if err != nil {
 		return err
 	}
@@ -333,8 +371,26 @@ func (s *state) updateFile(file string) error {
 	return nil
 }
 
-func (s *state) routineUpdate(file string, interval int) {
-	log.Debugf("Starting refresh routine (file: %v, interval: %vs)", file, interval)
+func (s *state) updateSlurm(file string) error {
+	log.Debugf("Refreshing slurm from %v", file)
+	data, err := fetchFile(file, s.userAgent)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	buf := bytes.NewBuffer(data)
+
+	slurm, err := prefixfile.DecodeJSONSlurm(buf)
+	if err != nil {
+		return err
+	}
+	s.slurm = slurm
+	return nil
+}
+
+func (s *state) routineUpdate(file string, interval int, slurmFile string) {
+	log.Debugf("Starting refresh routine (file: %v, interval: %vs, slurm: %v)", file, interval, slurmFile)
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGHUP)
 	for {
@@ -345,6 +401,12 @@ func (s *state) routineUpdate(file string, interval int) {
 			log.Debug("Received HUP signal")
 		}
 		delay.Stop()
+		if slurmFile != "" {
+			err := s.updateSlurm(slurmFile)
+			if err != nil {
+				log.Errorf("Slurm: %v", err)
+			}
+		}
 		err := s.updateFile(file)
 		if err != nil {
 			switch err.(type) {
@@ -355,6 +417,14 @@ func (s *state) routineUpdate(file string, interval int) {
 			}
 		}
 	}
+}
+
+func (s *state) exporter(wr http.ResponseWriter, r *http.Request) {
+	s.lockJson.RLock()
+	toExport := s.exported
+	s.lockJson.RUnlock()
+	enc := json.NewEncoder(wr)
+	enc.Encode(toExport)
 }
 
 type state struct {
@@ -368,6 +438,12 @@ type state struct {
 	server *rtr.Server
 
 	metricsEvent *metricsEvent
+
+	exported prefixfile.ROAList
+	lockJson *sync.RWMutex
+	key      *ecdsa.PrivateKey
+
+	slurm *prefixfile.SlurmConfig
 
 	pubkey    *ecdsa.PublicKey
 	verify    bool
@@ -420,6 +496,19 @@ func ReadPublicKey(key []byte, isPem bool) (*ecdsa.PublicKey, error) {
 	return kconv, nil
 }
 
+func ReadKey(key []byte, isPem bool) (*ecdsa.PrivateKey, error) {
+	if isPem {
+		block, _ := pem.Decode(key)
+		key = block.Bytes
+	}
+
+	k, err := x509.ParseECPrivateKey(key)
+	if err != nil {
+		return nil, err
+	}
+	return k, nil
+}
+
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -443,10 +532,11 @@ func main() {
 	}
 
 	var me *metricsEvent
+	var enableHTTP bool
 	if *MetricsAddr != "" {
 		initMetrics()
-		go metricHTTP()
 		me = &metricsEvent{}
+		enableHTTP = true
 	}
 
 	server := rtr.NewServer(sc, me, deh)
@@ -473,6 +563,31 @@ func main() {
 		verify:       *Verify,
 		checktime:    *TimeCheck,
 		userAgent:    *UserAgent,
+		lockJson:     &sync.RWMutex{},
+	}
+
+	if *ExportSign != "" {
+		keyFile, err := os.Open(*ExportSign)
+		if err != nil {
+			log.Fatal(err)
+		}
+		keyBytes, err := ioutil.ReadAll(keyFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		keyFile.Close()
+		keyDec, err := ReadKey(keyBytes, true)
+		if err != nil {
+			log.Fatal(err)
+		}
+		s.key = keyDec
+	}
+
+	if enableHTTP {
+		if *ExportPath != "" {
+			http.HandleFunc(*ExportPath, s.exporter)
+		}
+		go metricHTTP()
 	}
 
 	if *Bind == "" && *BindTLS == "" && *BindSSH == "" {
@@ -589,6 +704,17 @@ func main() {
 		}()
 	}
 
+	slurmFile := *Slurm
+	if slurmFile != "" {
+		err := s.updateSlurm(slurmFile)
+		if err != nil {
+			log.Errorf("Slurm: %v", err)
+		}
+		if !*SlurmRefresh {
+			slurmFile = ""
+		}
+	}
+
 	err := s.updateFile(*CacheBin)
 	if err != nil {
 		switch err.(type) {
@@ -598,6 +724,6 @@ func main() {
 			log.Errorf("Error updating: %v", err)
 		}
 	}
-	s.routineUpdate(*CacheBin, *RefreshInterval)
+	s.routineUpdate(*CacheBin, *RefreshInterval, slurmFile)
 
 }

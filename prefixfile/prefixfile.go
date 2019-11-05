@@ -145,3 +145,11 @@ func (roa *ROAJson) GetMaxLen() int {
 func (roa *ROAJson) String() string {
 	return fmt.Sprintf("%v/%v/%v", roa.Prefix, roa.Length, roa.ASN)
 }
+
+func GetIPBroadcast(ipnet net.IPNet) net.IP {
+	br := make([]byte, len(ipnet.IP))
+	for i := 0; i < len(ipnet.IP); i++ {
+		br[i] = ipnet.IP[i] | (^ipnet.Mask[i])
+	}
+	return net.IP(br)
+}
