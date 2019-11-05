@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/asn1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -77,10 +78,10 @@ func (roalist *ROAList) Sign(privkey *ecdsa.PrivateKey) (string, string, error) 
 }
 
 type ROAJson struct {
-	Prefix string `json:"prefix"`
-	Length uint8  `json:"maxLength"`
-	ASN    string `json:"asn"`
-	TA     string `json:"ta,omitempty"`
+	Prefix string      `json:"prefix"`
+	Length uint8       `json:"maxLength"`
+	ASN    interface{} `json:"asn"`
+	TA     string      `json:"ta,omitempty"`
 }
 
 type MetaData struct {
@@ -96,17 +97,44 @@ type ROAList struct {
 	Data     []ROAJson `json:"roas"`
 }
 
-func (roa *ROAJson) GetASN() uint32 {
-	if len(roa.ASN) > 2 {
-		asn, _ := strconv.Atoi(roa.ASN[2:])
-		return uint32(asn)
-	} else {
-		return 0
+func (roa *ROAJson) GetASN2() (uint32, error) {
+	switch asnc := roa.ASN.(type) {
+	case string:
+		asnStr := strings.TrimLeft(asnc, "aAsS")
+		asnInt, err := strconv.ParseUint(asnStr, 10, 32)
+		if err != nil {
+			return 0, errors.New(fmt.Sprintf("Could not decode ASN: %v as part of ROA", roa.ASN))
+		}
+		asn := uint32(asnInt)
+		return asn, nil
+	case float64:
+		return uint32(asnc), nil
+	case int:
+		return uint32(asnc), nil
+	default:
+		return 0, errors.New(fmt.Sprintf("Could not decode ASN: %v as part of ROA", roa.ASN))
 	}
 }
 
+func (roa *ROAJson) GetASN() uint32 {
+	asn, _ := roa.GetASN2()
+	return asn
+}
+
+func (roa *ROAJson) SetASN(asn uint32) {
+	roa.ASN = fmt.Sprintf("AS%v", asn)
+}
+
+func (roa *ROAJson) GetPrefix2() (*net.IPNet, error) {
+	_, prefix, err := net.ParseCIDR(roa.Prefix)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Could not decode prefix: %v as part of ROA", roa.Prefix))
+	}
+	return prefix, nil
+}
+
 func (roa *ROAJson) GetPrefix() *net.IPNet {
-	_, prefix, _ := net.ParseCIDR(roa.Prefix)
+	prefix, _ := roa.GetPrefix2()
 	return prefix
 }
 

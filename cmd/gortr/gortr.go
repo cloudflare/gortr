@@ -25,7 +25,6 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -211,10 +210,16 @@ func processData(roalistjson *prefixfile.ROAList) ([]rtr.ROA, int, int, int) {
 	var countv4 int
 	var countv6 int
 	for _, v := range roalistjson.Data {
-		_, prefix, _ := net.ParseCIDR(v.Prefix)
-		asnStr := v.ASN[2:len(v.ASN)]
-		asnInt, _ := strconv.ParseUint(asnStr, 10, 32)
-		asn := uint32(asnInt)
+		prefix, err := v.GetPrefix2()
+		if err != nil {
+			log.Error(err)
+			continue
+		}
+		asn, err := v.GetASN2()
+		if err != nil {
+			log.Error(err)
+			continue
+		}
 
 		count++
 		if prefix.IP.To4() != nil {
