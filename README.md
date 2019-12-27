@@ -299,7 +299,7 @@ Implementations on versions may vary.
 | Alcatel         | Yes       | No  | No  |                   |
 | Arista          | No        | No  | No  |                   |
 | FRRouting       | Yes       | No  | Yes | Only SSH key      |
-| Bird            | Yes       | No  | Yes | Only SSH key      |
+| Bird2           | Yes       | No  | Yes | Only SSH key      |
 | Quagga          | Yes       | No  | No  |                   |
 
 ### Configure on Juniper
