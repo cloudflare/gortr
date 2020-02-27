@@ -26,6 +26,10 @@ jobs:
         - GOOS=darwin make build-gortr
         - GOOS=windows EXTENSION=.exe make build-gortr
         - make package-deb-gortr package-rpm-gortr
+        - GOOS=linux make build-rtrdump
+        - GOOS=darwin make build-rtrdump
+        - GOOS=windows EXTENSION=.exe make build-rtrdump
+        - make package-deb-rtrdump package-rpm-rtrdump
       deploy:
         provider: releases
         api_key:
