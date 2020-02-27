@@ -11,6 +11,19 @@ GoRTR is an open-source implementation of RPKI to Router protocol (RFC 6810) usi
 
 _This software comes with no warranty._
 
+## In the field
+
+<img align="left" src="docs/images/cloudflare.png" alt="Cloudflare" width="200px"/>
+
+_Cloudflare operates 200+ GoRTR globally. They provide redundancy in at the PoP level. This provides increased reliability by computing a unique prefix list and providing a secure distribution of the file over its CDN before being sent to the routers._
+
+_GoRTR also powers the public RTR server available on rtr.rpki.cloudflare.com on port 8282 and 8283 for SSH (rpki/rpki)_
+
+</br></br>
+
+_Do you use this tool at scale? Let us know!_
+
+
 ## Features of the server
 
 * Refreshes a JSON list of prefixes (from either Cloudflare or a RIPE Validator)
