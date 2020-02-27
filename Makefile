@@ -16,7 +16,6 @@ BUILDINFOS    :=  ($(shell date +%FT%T%z)$(BUILDINFOSDET))
 LDFLAGS       := '-X main.version=$(GORTR_VERSION) -X main.buildinfos=$(BUILDINFOS)'
 
 RTRDUMP_NAME        := rtrdump
-DESCRIPTION_RTRDUMP := RTRdump: a RPKI-to-Router client to debug a feed
 
 OUTPUT_GORTR := $(DIST_DIR)gortr-$(GORTR_VERSION)-$(GOOS)-$(ARCH)$(EXTENSION)
 OUTPUT_RTRDUMP := $(DIST_DIR)rtrdump-$(GORTR_VERSION)-$(GOOS)-$(ARCH)$(EXTENSION)
@@ -65,12 +64,13 @@ package-deb-gortr: prepare
         --url "$(URL)" \
         --architecture $(ARCH) \
         --license "$(LICENSE)" \
-       	--deb-no-default-config-files \
+        --deb-no-default-config-files \
         --package $(DIST_DIR) \
         $(OUTPUT_GORTR)=/usr/bin/gortr \
         package/gortr.service=/lib/systemd/system/gortr.service \
         package/gortr.env=/etc/default/gortr \
-        cmd/gortr/cf.pub=/usr/share/gortr/cf.pub
+        cmd/gortr/cf.pub=/usr/share/gortr/cf.pub \
+        $(OUTPUT_RTRDUMP)=/usr/bin/rtrdump
 
 .PHONY: package-rpm-gortr
 package-rpm-gortr: prepare
@@ -83,25 +83,5 @@ package-rpm-gortr: prepare
         $(OUTPUT_GORTR)=/usr/bin/gortr \
         package/gortr.service=/lib/systemd/system/gortr.service \
         package/gortr.env=/etc/default/gortr \
-        cmd/gortr/cf.pub=/usr/share/gortr/cf.pub
-
-.PHONY: package-deb-rtrdump
-package-deb-rtrdump:
-	fpm -s dir -t deb -n $(RTRDUMP_NAME) -v $(VERSION_PKG) \
-        --description "$(DESCRIPTION_RTRDUMP)"  \
-        --url "$(URL)" \
-        --architecture $(ARCH) \
-        --license "$(LICENSE)" \
-       	--deb-no-default-config-files \
-        --package $(DIST_DIR) \
+        cmd/gortr/cf.pub=/usr/share/gortr/cf.pub \
         $(OUTPUT_RTRDUMP)=/usr/bin/rtrdump
-
-.PHONY: package-rpm-rtrdump
-package-rpm-rtrdump:
-	fpm -s dir -t rpm -n $(RTRDUMP_NAME) -v $(VERSION_PKG) \
-        --description "$(DESCRIPTION_RTRDUMP)" \
-        --url "$(URL)" \
-        --architecture $(ARCH) \
-        --license "$(LICENSE) "\
-        --package $(DIST_DIR) \
-        $(OUTPUT_RTRDUMP)=/usr/bin/gortr
