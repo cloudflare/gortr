@@ -15,9 +15,16 @@ _This software comes with no warranty._
 
 <img align="left" src="docs/images/cloudflare.png" alt="Cloudflare" width="200px"/>
 
-_Cloudflare operates 200+ GoRTR globally. They provide redundancy in at the PoP level. This provides increased reliability by computing a unique prefix list and providing a secure distribution of the file over its CDN before being sent to the routers._
+_Cloudflare operates 200+ GoRTR globally. They provide redundancy in at the PoP level.
+This provides increased reliability by computing a unique prefix list and providing
+a secure distribution of the file over its CDN before being sent to the routers._
 
 _GoRTR also powers the public RTR server available on rtr.rpki.cloudflare.com on port 8282 and 8283 for SSH (rpki/rpki)_
+
+<img align="left" src="docs/images/telia.png" alt="Telia" width="200px"/>
+
+_Telia has deployed RPKI and uses GoRTR connected with OctoRPKI and rpki-client to distribute the ROAs to its routers.
+Instances of the RTR servers handle around 250 sessions each._
 
 </br></br>
 
