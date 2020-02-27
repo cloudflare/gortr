@@ -83,7 +83,7 @@ func (s *SlurmValidationOutputFilters) FilterOnROAs(roas []ROAJson) ([]ROAJson, 
 	added := make([]ROAJson, 0)
 	removed := make([]ROAJson, 0)
 	if s.PrefixFilters == nil || len(s.PrefixFilters) == 0 {
-		return added, removed
+		return roas, removed
 	}
 	for _, roa := range roas {
 		rPrefix := roa.GetPrefix()
