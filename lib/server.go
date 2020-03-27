@@ -146,7 +146,7 @@ type ServerConfiguration struct {
 func NewServer(configuration ServerConfiguration, handler RTRServerEventHandler, simpleHandler RTREventHandler) *Server {
 	var sessid uint16
 	if configuration.SessId < 0 {
-		GenerateSessionId()
+		sessid = GenerateSessionId()
 	} else {
 		sessid = uint16(configuration.SessId)
 	}
