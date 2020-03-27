@@ -21,10 +21,19 @@ a secure distribution of the file over its CDN before being sent to the routers.
 
 _GoRTR also powers the public RTR server available on rtr.rpki.cloudflare.com on port 8282 and 8283 for SSH (rpki/rpki)_
 
+</br> 
+
 <img align="left" src="docs/images/telia.png" alt="Telia" width="200px"/>
 
 _Telia has deployed RPKI and uses GoRTR connected with OctoRPKI and rpki-client to distribute the ROAs to its routers.
 Instances of the RTR servers handle around 250 sessions each._
+
+</br> 
+
+<img align="left" src="docs/images/ntt.png" alt="NTT" width="200px"/>
+
+_NTT has deployed OpenBSD's rpki-client together with GoRTR to facilitate rejecting RPKI Invalid BGP route announcements
+towards it's Global IP Network (AS 2914). More information is available [here](https://www.us.ntt.net/support/policy/rr.cfm#RPKI)._
 
 </br></br>
 
