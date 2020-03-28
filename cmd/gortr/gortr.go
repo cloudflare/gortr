@@ -38,6 +38,10 @@ const (
 	METHOD_NONE = iota
 	METHOD_PASSWORD
 	METHOD_KEY
+
+	USE_SERIAL_DISABLE = iota
+	USE_SERIAL_START
+	USE_SERIAL_FULL
 )
 
 var (
@@ -74,7 +78,9 @@ var (
 	Verify    = flag.Bool("verify", true, "Check signature using provided public key (disable by passing -verify=false)")
 	PublicKey = flag.String("verify.key", "cf.pub", "Public key path (PEM file)")
 
-	CacheBin        = flag.String("cache", "https://rpki.cloudflare.com/rpki.json", "URL of the cached JSON data")
+	CacheBin  = flag.String("cache", "https://rpki.cloudflare.com/rpki.json", "URL of the cached JSON data")
+	UseSerial = flag.String("useserial", "disable", "Use serial contained in file (disable, startup, full)")
+
 	Etag            = flag.Bool("etag", true, "Enable Etag header")
 	UserAgent       = flag.String("useragent", fmt.Sprintf("Cloudflare-%v (+https://github.com/cloudflare/gortr)", AppVersion), "User-Agent header")
 	RefreshInterval = flag.Int("refresh", 600, "Refresh interval in seconds")
@@ -138,6 +144,11 @@ var (
 		"none":     METHOD_NONE,
 		"password": METHOD_PASSWORD,
 		//"key":   METHOD_KEY,
+	}
+	serialToId = map[string]int{
+		"disable": USE_SERIAL_DISABLE,
+		"startup": USE_SERIAL_START,
+		"full":    USE_SERIAL_FULL,
 	}
 )
 
@@ -327,6 +338,8 @@ func (e IdenticalEtag) Error() string {
 }
 
 func (s *state) updateFile(file string) error {
+	sessid, _ := s.server.GetSessionId(nil)
+
 	log.Debugf("Refreshing cache from %s", file)
 
 	s.lastts = time.Now().UTC()
@@ -348,6 +361,14 @@ func (s *state) updateFile(file string) error {
 	roalistjson, err := decodeJSON(s.lastdata)
 	if err != nil {
 		return err
+	}
+
+	if s.useSerial == USE_SERIAL_START || s.useSerial == USE_SERIAL_FULL {
+		//if serial, _ := s.server.GetCurrentSerial(sessid); roalistjson.Metadata.Serial != 0 && serial != roalistjson.Metadata.Serial  {
+		if _, valid := s.server.GetCurrentSerial(sessid); !valid || s.useSerial == USE_SERIAL_FULL {
+			// Set serial at beginning
+			s.server.SetSerial(uint32(roalistjson.Metadata.Serial))
+		}
 	}
 
 	if s.checktime {
@@ -379,12 +400,32 @@ func (s *state) updateFile(file string) error {
 		log.Infof("Slurm filtering: %v kept, %v removed, %v asserted", len(kept), len(removed), len(asserted))
 		roasjson = append(kept, asserted...)
 	}
+
+	roas, count, countv4, countv6 := processData(roasjson)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("New update (%v uniques, %v total prefixes). %v bytes. Updating sha256 hash %x -> %x",
+		len(roas), count, len(s.lastconverted), s.lasthash, hsum)
+	s.lasthash = hsum
+
+	s.server.AddROAs(roas)
+
+	serial, _ := s.server.GetCurrentSerial(sessid)
+	log.Infof("Updated added, new serial %v", serial)
+	if s.sendNotifs {
+		log.Debugf("Sending notifications to clients")
+		s.server.NotifyClientsLatest()
+	}
+
 	s.lockJson.Lock()
 	s.exported = prefixfile.ROAList{
 		Metadata: prefixfile.MetaData{
 			Counts:    len(roasjson),
 			Generated: roalistjson.Metadata.Generated,
 			Valid:     roalistjson.Metadata.Valid,
+			Serial:    int(serial),
 			/*Signature:     roalistjson.Metadata.Signature,
 			SignatureDate: roalistjson.Metadata.SignatureDate,*/
 		},
@@ -401,25 +442,6 @@ func (s *state) updateFile(file string) error {
 	}
 
 	s.lockJson.Unlock()
-
-	roas, count, countv4, countv6 := processData(roasjson)
-	if err != nil {
-		return err
-	}
-
-	log.Infof("New update (%v uniques, %v total prefixes). %v bytes. Updating sha256 hash %x -> %x",
-		len(roas), count, len(s.lastconverted), s.lasthash, hsum)
-	s.lasthash = hsum
-
-	s.server.AddROAs(roas)
-
-	sessid, _ := s.server.GetSessionId(nil)
-	serial, _ := s.server.GetCurrentSerial(sessid)
-	log.Infof("Updated added, new serial %v", serial)
-	if s.sendNotifs {
-		log.Debugf("Sending notifications to clients")
-		s.server.NotifyClientsLatest()
-	}
 
 	if s.metricsEvent != nil {
 		var countv4_dup int
@@ -512,6 +534,7 @@ type state struct {
 	userAgent     string
 	etags         map[string]string
 	enableEtags   bool
+	useSerial     int
 
 	server *rtr.Server
 
@@ -646,6 +669,14 @@ func main() {
 		lockJson:     &sync.RWMutex{},
 	}
 
+	if serialId, ok := serialToId[*UseSerial]; ok {
+		s.useSerial = serialId
+	} else {
+		log.Fatalf("Serial configuration %s is unknown", *UseSerial)
+	}
+
+	server.SetManualSerial(s.useSerial == USE_SERIAL_FULL)
+
 	if *ExportSign != "" {
 		keyFile, err := os.Open(*ExportSign)
 		if err != nil {
@@ -672,6 +703,38 @@ func main() {
 
 	if *Bind == "" && *BindTLS == "" && *BindSSH == "" {
 		log.Fatalf("Specify at least a bind address")
+	}
+
+	err := s.updateFile(*CacheBin)
+	if err != nil {
+		switch err.(type) {
+		case HttpNotModified:
+			log.Info(err)
+		case IdenticalFile:
+			log.Info(err)
+		case IdenticalEtag:
+			log.Info(err)
+		default:
+			log.Errorf("Error updating: %v", err)
+		}
+	}
+
+	slurmFile := *Slurm
+	if slurmFile != "" {
+		err := s.updateSlurm(slurmFile)
+		if err != nil {
+			switch err.(type) {
+			case HttpNotModified:
+				log.Info(err)
+			case IdenticalEtag:
+				log.Info(err)
+			default:
+				log.Errorf("Slurm: %v", err)
+			}
+		}
+		if !*SlurmRefresh {
+			slurmFile = ""
+		}
 	}
 
 	if *Bind != "" {
@@ -784,37 +847,6 @@ func main() {
 		}()
 	}
 
-	slurmFile := *Slurm
-	if slurmFile != "" {
-		err := s.updateSlurm(slurmFile)
-		if err != nil {
-			switch err.(type) {
-			case HttpNotModified:
-				log.Info(err)
-			case IdenticalEtag:
-				log.Info(err)
-			default:
-				log.Errorf("Slurm: %v", err)
-			}
-		}
-		if !*SlurmRefresh {
-			slurmFile = ""
-		}
-	}
-
-	err := s.updateFile(*CacheBin)
-	if err != nil {
-		switch err.(type) {
-		case HttpNotModified:
-			log.Info(err)
-		case IdenticalFile:
-			log.Info(err)
-		case IdenticalEtag:
-			log.Info(err)
-		default:
-			log.Errorf("Error updating: %v", err)
-		}
-	}
 	s.routineUpdate(*CacheBin, *RefreshInterval, slurmFile)
 
 }

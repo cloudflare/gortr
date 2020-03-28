@@ -120,6 +120,7 @@ type Server struct {
 	roaCurrent       []ROA
 	roaCurrentSerial uint32
 	keepDiff         int
+	manualserial     bool
 
 	pduRefreshInterval uint32
 	pduRetryInterval   uint32
@@ -165,7 +166,6 @@ func NewServer(configuration ServerConfiguration, handler RTRServerEventHandler,
 	}
 
 	return &Server{
-
 		roalock:       &sync.RWMutex{},
 		roaListDiff:   make([][]ROA, 0),
 		roaMapSerial:  make(map[uint32]int),
@@ -266,6 +266,10 @@ func ApplyDiff(diff []ROA, prevRoas []ROA) []ROA {
 	return newroas
 }
 
+func (s *Server) SetManualSerial(v bool) {
+	s.manualserial = v
+}
+
 func (s *Server) GetSessionId(c *Client) (uint16, error) {
 	return s.sessId, nil
 }
@@ -305,11 +309,7 @@ func (s *Server) GetCurrentSerial(sessId uint16) (uint32, bool) {
 }
 
 func (s *Server) getCurrentSerial() (uint32, bool) {
-	if len(s.roaListSerial) > 0 {
-		return s.roaCurrentSerial, true
-	} else {
-		return 0, false
-	}
+	return s.roaCurrentSerial, len(s.roaListSerial) > 0
 }
 
 func (s *Server) GenerateSerial() uint32 {
@@ -320,11 +320,24 @@ func (s *Server) GenerateSerial() uint32 {
 }
 
 func (s *Server) generateSerial() uint32 {
-	newserial := uint32(1)
-	if len(s.roaListSerial) > 0 {
+	newserial := s.roaCurrentSerial
+	if !s.manualserial && len(s.roaListSerial) > 0 {
 		newserial = s.roaListSerial[len(s.roaListSerial)-1] + 1
 	}
 	return newserial
+}
+
+func (s *Server) setSerial(serial uint32) {
+	s.roaCurrentSerial = serial
+}
+
+// This function sets the serial. Function must
+// be called before the ROAs data is added.
+func (s *Server) SetSerial(serial uint32) {
+	s.roalock.RLock()
+	//s.roaListSerial = make([]uint32, 0)
+	s.setSerial(serial)
+	s.roalock.RUnlock()
 }
 
 func (s *Server) AddROAs(roas []ROA) {
@@ -361,26 +374,24 @@ func (s *Server) AddROAsDiff(diff []ROA) {
 		nextDiff[i] = ApplyDiff(diff, prevRoas)
 	}
 	newRoaCurrent := ApplyDiff(diff, s.roaCurrent)
-	curserial, valid := s.getCurrentSerial()
+	curserial, _ := s.getCurrentSerial()
 	s.roalock.RUnlock()
 
 	s.roalock.Lock()
 	newserial := s.generateSerial()
 	removed := s.addSerial(newserial)
 
-	if valid {
-		nextDiff = append(nextDiff, diff)
-		if len(nextDiff) >= s.keepDiff && s.keepDiff > 0 {
-			nextDiff = nextDiff[len(removed):]
-		}
+	nextDiff = append(nextDiff, diff)
+	if len(nextDiff) >= s.keepDiff && s.keepDiff > 0 {
+		nextDiff = nextDiff[len(removed):]
+	}
 
-		s.roaMapSerial[curserial] = len(nextDiff) - 1
+	s.roaMapSerial[curserial] = len(nextDiff) - 1
 
-		if len(removed) > 0 {
-			for k, v := range s.roaMapSerial {
-				if k != curserial {
-					s.roaMapSerial[k] = v - len(removed)
-				}
+	if len(removed) > 0 {
+		for k, v := range s.roaMapSerial {
+			if k != curserial {
+				s.roaMapSerial[k] = v - len(removed)
 			}
 		}
 	}
@@ -390,7 +401,7 @@ func (s *Server) AddROAsDiff(diff []ROA) {
 	}
 	s.roaListDiff = nextDiff
 	s.roaCurrent = newRoaCurrent
-	s.roaCurrentSerial = newserial
+	s.setSerial(newserial)
 	s.roalock.Unlock()
 }
 

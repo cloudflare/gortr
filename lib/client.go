@@ -62,9 +62,10 @@ func (c *ClientSession) SendResetQuery() {
 	c.SendPDU(pdu)
 }
 
-func (c *ClientSession) SendSerialQuery(serial uint32) {
+func (c *ClientSession) SendSerialQuery(sessionid uint16, serial uint32) {
 	pdu := &PDUSerialQuery{
-		// to fill
+		SessionId:    sessionid,
+		SerialNumber: serial,
 	}
 	c.SendPDU(pdu)
 }
