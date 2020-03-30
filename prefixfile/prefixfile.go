@@ -90,6 +90,7 @@ type MetaData struct {
 	Valid         int    `json:"valid,omitempty"`
 	Signature     string `json:"signature,omitempty"`
 	SignatureDate string `json:"signatureDate,omitempty"`
+	Serial        int    `json:"serial,omitempty"`
 }
 
 type ROAList struct {

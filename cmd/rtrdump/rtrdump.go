@@ -33,6 +33,10 @@ var (
 	Connect = flag.String("connect", "127.0.0.1:8282", "Connection address")
 	OutFile = flag.String("file", "output.json", "Output file")
 
+	InitSerial = flag.Bool("serial", false, "Send serial query instead of reset")
+	Serial     = flag.Int("serial.value", 0, "Serial number")
+	Session    = flag.Int("session.id", 0, "Session ID")
+
 	ConnType     = flag.String("type", "plain", "Type of connection: plain, tls or ssh")
 	ValidateCert = flag.Bool("tls.validate", true, "Validate TLS")
 
@@ -62,6 +66,10 @@ var (
 
 type Client struct {
 	Data prefixfile.ROAList
+
+	InitSerial bool
+	Serial     uint32
+	SessionID  uint16
 }
 
 func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
@@ -86,7 +94,8 @@ func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
 	case *rtr.PDUEndOfData:
 		t := time.Now().UTC().UnixNano() / 1000000000
 		c.Data.Metadata.Generated = int(t)
-		c.Data.Metadata.Valid = int(pdu.SerialNumber)
+		c.Data.Metadata.Valid = int(t) + int(pdu.RefreshInterval)
+		c.Data.Metadata.Serial = int(pdu.SerialNumber)
 		cs.Disconnect()
 	case *rtr.PDUCacheResponse:
 	default:
@@ -95,7 +104,11 @@ func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
 }
 
 func (c *Client) ClientConnected(cs *rtr.ClientSession) {
-	cs.SendResetQuery()
+	if c.InitSerial {
+		cs.SendSerialQuery(c.SessionID, c.Serial)
+	} else {
+		cs.SendResetQuery()
+	}
 }
 
 func (c *Client) ClientDisconnected(cs *rtr.ClientSession) {
@@ -124,6 +137,9 @@ func main() {
 			Metadata: prefixfile.MetaData{},
 			Data:     make([]prefixfile.ROAJson, 0),
 		},
+		InitSerial: *InitSerial,
+		Serial:     uint32(*Serial),
+		SessionID:  uint16(*Session),
 	}
 
 	clientSession := rtr.NewClientSession(cc, client)

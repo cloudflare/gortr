@@ -316,6 +316,18 @@ To use a data source that do not contains signatures or validity information, pa
 
 Cloudflare's prefix list removes duplicates and entries that are not routed on the Internet (>/24 IPv4 and >/48 IPv6).
 
+By default, the session ID will be randomly generated. The serial will start at zero.
+
+You can define a serial to start with the following way:
+* the JSON must contain a `serial` field in `metadata`; and
+* the flag `-useserial` must be set to 1 or 2
+
+When flag is set to 1, every change of file will increment the serial regardless of the current `serial` field.
+Make sure the refresh rate of GoRTR is more frequent than the refresh rate of the JSON.
+
+When flag is set to 2, GoRTR will set the value of the serial in the JSON. If an ID is missed or not updated,
+it will cause discrepancies on the client.
+
 ## Configurations
 
 ### Compatibility matrix
