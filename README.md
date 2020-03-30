@@ -1,5 +1,8 @@
 # GoRTR
 
+[![Build Status](https://travis-ci.org/cloudflare/gortr.svg?branch=master)](https://travis-ci.org/cloudflare/gortr)
+[![GoDoc](https://godoc.org/github.com/cloudflare/gortr?status.svg)](https://pkg.go.dev/github.com/cloudflare/gortr)
+
 GoRTR is an open-source implementation of RPKI to Router protocol (RFC 6810) using the [the Go Programming Language](http://golang.org/).
 
 * `/lib` contains a library to create your own server and client.
