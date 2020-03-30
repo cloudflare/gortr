@@ -44,3 +44,19 @@ jobs:
         - docker
       script:
         - make docker-gortr
+    - stage: integration
+      dist: trusty
+      services:
+        - docker
+      env:
+        - DOCKER_COMPOSE_VERSION=1.25.4
+      before_install:
+        - sudo rm /usr/local/bin/docker-compose
+        - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
+        - chmod +x docker-compose
+        - sudo mv docker-compose /usr/local/bin
+        - docker-compose -f docker-compose-integration.yml up -d --build
+      script:
+        - docker-compose -f docker-compose-integration.yml run rtrdump
+      after_script:
+        - docker-compose -f docker-compose-integration.yml down

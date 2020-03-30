@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "counts": 1,
+    "generated": 1577865600,
+    "valid": 1577866200,
+    "serial": 1
+  },
+  "roas": [
+    {
+      "prefix": "10.0.0.0/25",
+      "maxLength": 26,
+      "asn": "AS65000",
+      "ta": "Test ROA"
+    },
+    {
+      "prefix": "10.1.0.0/25",
+      "maxLength": 26,
+      "asn": "AS65001",
+      "ta": "Test ROA"
+    }
+  ]
+}

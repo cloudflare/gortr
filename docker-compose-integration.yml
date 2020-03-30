@@ -1,0 +1,27 @@
+version: '3'
+services:
+  gortr:
+    build:
+      dockerfile: Dockerfile.gortr
+      context: .
+    command:
+      - -cache
+      - rpki.json
+      - -slurm
+      - slurm.json
+      - -verify=false
+      - -checktime=false
+    volumes:
+      - ./cmd/gortr/test.rpki.json:/rpki.json
+      - ./cmd/gortr/test.slurm.json:/slurm.json
+  rtrdump:
+    build:
+      dockerfile: Dockerfile.rtrdump
+      context: .
+    command:
+      - -connect
+      - gortr:8282
+      - -file
+      - ""
+    depends_on:
+      - gortr
