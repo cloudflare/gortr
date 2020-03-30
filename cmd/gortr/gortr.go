@@ -52,6 +52,10 @@ var (
 	ExportSign = flag.String("export.sign", "", "Sign export with key")
 
 	RTRVersion = flag.Int("protocol", 1, "RTR protocol version")
+	SessionID  = flag.Int("rtr.sessionid", -1, "Set session ID (if < 0: will be randomized)")
+	RefreshRTR = flag.Int("rtr.refresh", 3600, "Refresh interval")
+	RetryRTR   = flag.Int("rtr.retry", 600, "Retry interval")
+	ExpireRTR  = flag.Int("rtr.expire", 7200, "Expire interval")
 
 	Bind = flag.String("bind", ":8282", "Bind address")
 
@@ -605,8 +609,13 @@ func main() {
 
 	sc := rtr.ServerConfiguration{
 		ProtocolVersion: protoverToLib[*RTRVersion],
+		SessId:          *SessionID,
 		KeepDifference:  3,
 		Log:             log.StandardLogger(),
+
+		RefreshInterval: uint32(*RefreshRTR),
+		RetryInterval:   uint32(*RetryRTR),
+		ExpireInterval:  uint32(*ExpireRTR),
 	}
 
 	var me *metricsEvent
@@ -676,6 +685,8 @@ func main() {
 
 	if *Bind != "" {
 		go func() {
+			sessid, _ := server.GetSessionId(nil)
+			log.Infof("GoRTR Server started (sessionID:%d, refresh:%d, retry:%d, expire:%d)", sessid, sc.RefreshInterval, sc.RetryInterval, sc.ExpireInterval)
 			err := server.Start(*Bind)
 			if err != nil {
 				log.Fatal(err)

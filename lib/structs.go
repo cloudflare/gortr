@@ -3,6 +3,7 @@ package rtrlib
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -82,7 +83,7 @@ func TypeToString(t uint8) string {
 	case PDU_ID_ERROR_REPORT:
 		return "Error Report"
 	default:
-		return fmt.Sprintf("Unknown type %v", t)
+		return fmt.Sprintf("Unknown type %d", t)
 	}
 }
 
@@ -106,7 +107,7 @@ type PDUSerialNotify struct {
 }
 
 func (pdu *PDUSerialNotify) String() string {
-	return fmt.Sprintf("PDU Serial Notify v%v (session: %v): serial: %v", pdu.Version, pdu.SessionId, pdu.SerialNumber)
+	return fmt.Sprintf("PDU Serial Notify v%d (session: %d): serial: %d", pdu.Version, pdu.SessionId, pdu.SerialNumber)
 }
 
 func (pdu *PDUSerialNotify) Bytes() []byte {
@@ -142,7 +143,7 @@ type PDUSerialQuery struct {
 }
 
 func (pdu *PDUSerialQuery) String() string {
-	return fmt.Sprintf("PDU Serial Query v%v (session: %v): serial: %v", pdu.Version, pdu.SessionId, pdu.SerialNumber)
+	return fmt.Sprintf("PDU Serial Query v%d (session: %d): serial: %d", pdu.Version, pdu.SessionId, pdu.SerialNumber)
 }
 
 func (pdu *PDUSerialQuery) Bytes() []byte {
@@ -176,7 +177,7 @@ type PDUResetQuery struct {
 }
 
 func (pdu *PDUResetQuery) String() string {
-	return fmt.Sprintf("PDU Reset Query v%v", pdu.Version)
+	return fmt.Sprintf("PDU Reset Query v%d", pdu.Version)
 }
 
 func (pdu *PDUResetQuery) Bytes() []byte {
@@ -210,7 +211,7 @@ type PDUCacheResponse struct {
 }
 
 func (pdu *PDUCacheResponse) String() string {
-	return fmt.Sprintf("PDU Cache Response v%v (session: %v)", pdu.Version, pdu.SessionId)
+	return fmt.Sprintf("PDU Cache Response v%d (session: %d)", pdu.Version, pdu.SessionId)
 }
 
 func (pdu *PDUCacheResponse) Bytes() []byte {
@@ -248,7 +249,7 @@ type PDUIPv4Prefix struct {
 
 func (pdu *PDUIPv4Prefix) String() string {
 	mask, _ := pdu.Prefix.Mask.Size()
-	return fmt.Sprintf("PDU IPv4 Prefix v%v %v/%v(->/%v), origin: AS%v, flags: %v", pdu.Version, pdu.Prefix.IP, mask, pdu.MaxLen, pdu.ASN, pdu.Flags)
+	return fmt.Sprintf("PDU IPv4 Prefix v%d %s/%d(->/%d), origin: AS%d, flags: %d", pdu.Version, pdu.Prefix.IP.String(), mask, pdu.MaxLen, pdu.ASN, pdu.Flags)
 }
 
 func (pdu *PDUIPv4Prefix) Bytes() []byte {
@@ -293,7 +294,7 @@ type PDUIPv6Prefix struct {
 
 func (pdu *PDUIPv6Prefix) String() string {
 	mask, _ := pdu.Prefix.Mask.Size()
-	return fmt.Sprintf("PDU IPv6 Prefix v%v %v/%v(->/%v), origin: AS%v, flags: %v", pdu.Version, pdu.Prefix.IP, mask, pdu.MaxLen, pdu.ASN, pdu.Flags)
+	return fmt.Sprintf("PDU IPv6 Prefix v%d %s/%d(->/%d), origin: AS%d, flags: %d", pdu.Version, pdu.Prefix.IP.String(), mask, pdu.MaxLen, pdu.ASN, pdu.Flags)
 }
 
 func (pdu *PDUIPv6Prefix) Bytes() []byte {
@@ -339,7 +340,8 @@ type PDUEndOfData struct {
 }
 
 func (pdu *PDUEndOfData) String() string {
-	return fmt.Sprintf("PDU End of Data v%v (session: %v): serial: %v", pdu.Version, pdu.SessionId, pdu.SerialNumber)
+	return fmt.Sprintf("PDU End of Data v%d (session: %d): serial: %d, refresh: %d, retry: %d, expire: %d",
+		pdu.Version, pdu.SessionId, pdu.SerialNumber, pdu.RefreshInterval, pdu.RetryInterval, pdu.ExpireInterval)
 }
 
 func (pdu *PDUEndOfData) Bytes() []byte {
@@ -382,7 +384,7 @@ type PDUCacheReset struct {
 }
 
 func (pdu *PDUCacheReset) String() string {
-	return fmt.Sprintf("PDU Cache Reset v%v", pdu.Version)
+	return fmt.Sprintf("PDU Cache Reset v%d", pdu.Version)
 }
 
 func (pdu *PDUCacheReset) Bytes() []byte {
@@ -459,7 +461,7 @@ type PDUErrorReport struct {
 }
 
 func (pdu *PDUErrorReport) String() string {
-	return fmt.Sprintf("PDU Error report v%v (error code: %v): bytes PDU copy (%v): %v. Message: %v", pdu.Version, pdu.ErrorCode, len(pdu.PDUCopy), pdu.PDUCopy, pdu.ErrorMsg)
+	return fmt.Sprintf("PDU Error report v%d (error code: %d): bytes PDU copy (%d): %s. Message: %s", pdu.Version, pdu.ErrorCode, len(pdu.PDUCopy), hex.EncodeToString(pdu.PDUCopy), pdu.ErrorMsg)
 }
 
 func (pdu *PDUErrorReport) Bytes() []byte {
@@ -532,7 +534,7 @@ func Decode(rdr io.Reader) (PDU, error) {
 	}
 
 	if length < 8 {
-		return nil, errors.New(fmt.Sprintf("Wrong length: %v < 8", length))
+		return nil, errors.New(fmt.Sprintf("Wrong length: %d < 8", length))
 	}
 	toread := make([]byte, length-8)
 	err = binary.Read(rdr, binary.BigEndian, toread)
@@ -543,7 +545,7 @@ func Decode(rdr io.Reader) (PDU, error) {
 	switch pduType {
 	case PDU_ID_SERIAL_NOTIFY:
 		if len(toread) != 4 {
-			return nil, errors.New(fmt.Sprintf("Wrong length for Serial Notify PDU: %v != 4", len(toread)))
+			return nil, errors.New(fmt.Sprintf("Wrong length for Serial Notify PDU: %d != 4", len(toread)))
 		}
 		serial := binary.BigEndian.Uint32(toread)
 		return &PDUSerialNotify{
@@ -553,7 +555,7 @@ func Decode(rdr io.Reader) (PDU, error) {
 		}, nil
 	case PDU_ID_SERIAL_QUERY:
 		if len(toread) != 4 {
-			return nil, errors.New(fmt.Sprintf("Wrong length for Serial Query PDU: %v != 4", len(toread)))
+			return nil, errors.New(fmt.Sprintf("Wrong length for Serial Query PDU: %d != 4", len(toread)))
 		}
 		serial := binary.BigEndian.Uint32(toread)
 		return &PDUSerialQuery{
@@ -563,14 +565,14 @@ func Decode(rdr io.Reader) (PDU, error) {
 		}, nil
 	case PDU_ID_RESET_QUERY:
 		if len(toread) != 0 {
-			return nil, errors.New(fmt.Sprintf("Wrong length for Reset Query PDU: %v != 0", len(toread)))
+			return nil, errors.New(fmt.Sprintf("Wrong length for Reset Query PDU: %d != 0", len(toread)))
 		}
 		return &PDUResetQuery{
 			Version: pver,
 		}, nil
 	case PDU_ID_CACHE_RESPONSE:
 		if len(toread) != 0 {
-			return nil, errors.New(fmt.Sprintf("Wrong length for Cache Response PDU: %v != 0", len(toread)))
+			return nil, errors.New(fmt.Sprintf("Wrong length for Cache Response PDU: %d != 0", len(toread)))
 		}
 		return &PDUCacheResponse{
 			Version:   pver,
@@ -578,7 +580,7 @@ func Decode(rdr io.Reader) (PDU, error) {
 		}, nil
 	case PDU_ID_IPV4_PREFIX:
 		if len(toread) != 12 {
-			return nil, errors.New(fmt.Sprintf("Wrong length for IPv4 Prefix PDU: %v != 12", len(toread)))
+			return nil, errors.New(fmt.Sprintf("Wrong length for IPv4 Prefix PDU: %d != 12", len(toread)))
 		}
 		prefixLen := int(toread[1])
 		ip := toread[4:8]
@@ -596,7 +598,7 @@ func Decode(rdr io.Reader) (PDU, error) {
 		}, nil
 	case PDU_ID_IPV6_PREFIX:
 		if len(toread) != 24 {
-			return nil, errors.New(fmt.Sprintf("Wrong length for IPv6 Prefix PDU: %v != 24", len(toread)))
+			return nil, errors.New(fmt.Sprintf("Wrong length for IPv6 Prefix PDU: %d != 24", len(toread)))
 		}
 		prefixLen := int(toread[1])
 		ip := toread[4:20]
@@ -614,7 +616,7 @@ func Decode(rdr io.Reader) (PDU, error) {
 		}, nil
 	case PDU_ID_END_OF_DATA:
 		if len(toread) != 4 && len(toread) != 16 {
-			return nil, errors.New(fmt.Sprintf("Wrong length for End of Data PDU: %v != 4 or != 16", len(toread)))
+			return nil, errors.New(fmt.Sprintf("Wrong length for End of Data PDU: %d != 4 or != 16", len(toread)))
 		}
 
 		var serial uint32
@@ -640,14 +642,14 @@ func Decode(rdr io.Reader) (PDU, error) {
 		}, nil
 	case PDU_ID_CACHE_RESET:
 		if len(toread) != 0 {
-			return nil, errors.New(fmt.Sprintf("Wrong length for Cache Reset PDU: %v != 0", len(toread)))
+			return nil, errors.New(fmt.Sprintf("Wrong length for Cache Reset PDU: %d != 0", len(toread)))
 		}
 		return &PDUCacheReset{
 			Version: pver,
 		}, nil
 	case PDU_ID_ROUTER_KEY:
 		if len(toread) != 28 {
-			return nil, errors.New(fmt.Sprintf("Wrong length for Router Key PDU: %v < 8", len(toread)))
+			return nil, errors.New(fmt.Sprintf("Wrong length for Router Key PDU: %d < 8", len(toread)))
 		}
 		asn := binary.BigEndian.Uint32(toread[20:24])
 		spki := binary.BigEndian.Uint32(toread[24:28])
@@ -661,7 +663,7 @@ func Decode(rdr io.Reader) (PDU, error) {
 		}, nil
 	case PDU_ID_ERROR_REPORT:
 		if len(toread) < 8 {
-			return nil, errors.New(fmt.Sprintf("Wrong length for Error Report PDU: %v < 8", len(toread)))
+			return nil, errors.New(fmt.Sprintf("Wrong length for Error Report PDU: %d < 8", len(toread)))
 		}
 		lenPdu := binary.BigEndian.Uint32(toread[0:4])
 		errPdu := toread[4 : lenPdu+4]
