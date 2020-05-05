@@ -314,7 +314,6 @@ Use your own validator, as long as the JSON source follows the following schema:
 * **Third-party JSON formatted VRP exports:**
   * [NTT](https://rpki.gin.ntt.net/api/export.json) (based on OpenBSD's `rpki-client`)
   * [RIPE](https://rpki-validator.ripe.net/api/export.json) (based on RIPE NCC's RPKI Cache Validator)
-  * [LACNIC](http://ripeval.labs.lacnic.net:8080/export.json) (based on RIPE NCC's RPKI Cache Validator)
   
 To use a data source that do not contains signatures or validity information, pass:
 `-verify=false -checktime=false`
