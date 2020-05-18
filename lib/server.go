@@ -501,8 +501,7 @@ func (s *Server) Start(bind string) error {
 	if err != nil {
 		return err
 	}
-	s.loopTCP(tcplist, "tcp", s.acceptClientTCP)
-	return nil
+	return s.loopTCP(tcplist, "tcp", s.acceptClientTCP)
 }
 
 func (s *Server) acceptClientTCP(tcpconn net.Conn) error {
@@ -583,27 +582,34 @@ func (s *Server) acceptClientSSH(tcpconn net.Conn) error {
 
 type ClientCallback func(net.Conn) error
 
-func (s *Server) loopTCP(tcplist net.Listener, logEnv string, clientCallback ClientCallback) {
+func (s *Server) loopTCP(tcplist net.Listener, logEnv string, clientCallback ClientCallback) error {
 	for {
-		tcpconn, _ := tcplist.Accept()
+		tcpconn, err := tcplist.Accept()
+		if err != nil {
+			if s.log != nil {
+				s.log.Errorf("Failed to accept %s connection: %s", logEnv, err)
+			}
+			continue
+		}
 
 		if s.maxconn > 0 && s.connected >= s.maxconn {
 			if s.log != nil {
-				s.log.Warnf("Could not accept %v connection from %v (not enough slots avaible: %v)", logEnv, tcpconn.RemoteAddr(), s.maxconn)
+				s.log.Warnf("Could not accept %s connection from %v (not enough slots avaible: %d)", logEnv, tcpconn.RemoteAddr(), s.maxconn)
 			}
 			tcpconn.Close()
 		} else {
 			if s.log != nil {
-				s.log.Infof("Accepted %v connection from %v (%v/%v)", logEnv, tcpconn.RemoteAddr(), s.connected+1, s.maxconn)
+				s.log.Infof("Accepted %s connection from %v (%d/%d)", logEnv, tcpconn.RemoteAddr(), s.connected+1, s.maxconn)
 			}
 			if clientCallback != nil {
 				err := clientCallback(tcpconn)
 				if err != nil && s.log != nil {
-					s.log.Errorf("Error with %v client %v: %v", logEnv, tcpconn.RemoteAddr(), err)
+					s.log.Errorf("Error with %s client %v: %v", logEnv, tcpconn.RemoteAddr(), err)
 				}
 			}
 		}
 	}
+	return nil
 }
 
 func (s *Server) StartSSH(bind string, config *ssh.ServerConfig) error {
@@ -612,8 +618,7 @@ func (s *Server) StartSSH(bind string, config *ssh.ServerConfig) error {
 		return err
 	}
 	s.sshconfig = config
-	s.loopTCP(tcplist, "ssh", s.acceptClientSSH)
-	return nil
+	return s.loopTCP(tcplist, "ssh", s.acceptClientSSH)
 }
 
 func (s *Server) StartTLS(bind string, config *tls.Config) error {
@@ -621,8 +626,7 @@ func (s *Server) StartTLS(bind string, config *tls.Config) error {
 	if err != nil {
 		return err
 	}
-	s.loopTCP(tcplist, "tls", s.acceptClientTCP)
-	return nil
+	return s.loopTCP(tcplist, "tls", s.acceptClientTCP)
 }
 
 func (s *Server) GetClientList() []*Client {
