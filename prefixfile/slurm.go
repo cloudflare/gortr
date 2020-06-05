@@ -135,6 +135,9 @@ func (s *SlurmLocallyAddedAssertions) AssertROAs() []ROAJson {
 	}
 	for _, assertion := range s.PrefixAssertions {
 		prefix := assertion.GetPrefix()
+		if prefix == nil {
+			continue
+		}
 		size, _ := prefix.Mask.Size()
 		maxLength := assertion.MaxPrefixLength
 		if assertion.MaxPrefixLength <= size {
