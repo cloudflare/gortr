@@ -49,8 +49,9 @@ var (
 
 	RefreshInterval = flag.Int("refresh", 600, "Refresh interval in seconds")
 
-	LogLevel = flag.String("loglevel", "info", "Log level")
-	Version  = flag.Bool("version", false, "Print version")
+	LogLevel   = flag.String("loglevel", "info", "Log level")
+	LogDataPDU = flag.Bool("datapdu", false, "Log data PDU")
+	Version    = flag.Bool("version", false, "Print version")
 
 	typeToId = map[string]int{
 		"plain": rtr.TYPE_PLAIN,
@@ -73,7 +74,6 @@ type Client struct {
 }
 
 func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
-	log.Debugf("Received: %v", pdu)
 	switch pdu := pdu.(type) {
 	case *rtr.PDUIPv4Prefix:
 		rj := prefixfile.ROAJson{
@@ -83,6 +83,10 @@ func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
 		}
 		c.Data.Data = append(c.Data.Data, rj)
 		c.Data.Metadata.Counts++
+
+		if *LogDataPDU {
+			log.Debugf("Received: %v", pdu)
+		}
 	case *rtr.PDUIPv6Prefix:
 		rj := prefixfile.ROAJson{
 			Prefix: pdu.Prefix.String(),
@@ -91,14 +95,21 @@ func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
 		}
 		c.Data.Data = append(c.Data.Data, rj)
 		c.Data.Metadata.Counts++
+
+		if *LogDataPDU {
+			log.Debugf("Received: %v", pdu)
+		}
 	case *rtr.PDUEndOfData:
 		t := time.Now().UTC().UnixNano() / 1000000000
 		c.Data.Metadata.Generated = int(t)
 		c.Data.Metadata.Valid = int(t) + int(pdu.RefreshInterval)
 		c.Data.Metadata.Serial = int(pdu.SerialNumber)
 		cs.Disconnect()
+		log.Debugf("Received: %v", pdu)
 	case *rtr.PDUCacheResponse:
+		log.Debugf("Received: %v", pdu)
 	default:
+		log.Debugf("Received: %v", pdu)
 		cs.Disconnect()
 	}
 }

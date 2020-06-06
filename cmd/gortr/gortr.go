@@ -94,8 +94,9 @@ var (
 	Slurm        = flag.String("slurm", "", "Slurm configuration file (filters and assertions)")
 	SlurmRefresh = flag.Bool("slurm.refresh", true, "Refresh along the cache")
 
-	LogLevel = flag.String("loglevel", "info", "Log level")
-	Version  = flag.Bool("version", false, "Print version")
+	LogLevel   = flag.String("loglevel", "info", "Log level")
+	LogVerbose = flag.Bool("log.verbose", false, "Additional debug logs")
+	Version    = flag.Bool("version", false, "Print version")
 
 	NumberOfROAs = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -635,6 +636,7 @@ func main() {
 		SessId:          *SessionID,
 		KeepDifference:  3,
 		Log:             log.StandardLogger(),
+		LogVerbose:      *LogVerbose,
 
 		RefreshInterval: uint32(*RefreshRTR),
 		RetryInterval:   uint32(*RetryRTR),
