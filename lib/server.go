@@ -67,7 +67,7 @@ func (e *DefaultRTREventHandler) RequestCache(c *Client) {
 		} else {
 			c.SendROAs(sessionId, serial, roas)
 			if e.Log != nil {
-				e.Log.Debugf("%v < Sent ROAs (current serial %v)", c, serial)
+				e.Log.Debugf("%v < Sent ROAs (current serial %d, session: %d)", c, serial, sessionId)
 			}
 		}
 	}
@@ -93,7 +93,7 @@ func (e *DefaultRTREventHandler) RequestNewVersion(c *Client, sessionId uint16, 
 		} else {
 			c.SendROAs(sessionId, serial, roas)
 			if e.Log != nil {
-				e.Log.Debugf("%v < Sent ROAs (current serial %v)", c, serial)
+				e.Log.Debugf("%v < Sent ROAs (current serial %d, session from client: %d)", c, serial, sessionId)
 			}
 		}
 	}
@@ -126,7 +126,8 @@ type Server struct {
 	pduRetryInterval   uint32
 	pduExpireInterval  uint32
 
-	log Logger
+	log        Logger
+	logverbose bool
 }
 
 type ServerConfiguration struct {
@@ -141,7 +142,8 @@ type ServerConfiguration struct {
 	RetryInterval   uint32
 	ExpireInterval  uint32
 
-	Log Logger
+	Log        Logger
+	LogVerbose bool
 }
 
 func NewServer(configuration ServerConfiguration, handler RTRServerEventHandler, simpleHandler RTREventHandler) *Server {
@@ -186,7 +188,8 @@ func NewServer(configuration ServerConfiguration, handler RTRServerEventHandler,
 		pduRetryInterval:   retryInterval,
 		pduExpireInterval:  expireInterval,
 
-		log: configuration.Log,
+		log:        configuration.Log,
+		logverbose: configuration.LogVerbose,
 	}
 }
 
@@ -347,8 +350,10 @@ func (s *Server) AddROAs(roas []ROA) {
 	roaCurrent := s.roaCurrent
 
 	added, removed, unchanged := ComputeDiff(roas, roaCurrent)
-	if s.log != nil {
+	if s.log != nil && s.logverbose {
 		s.log.Debugf("Computed diff: added (%v), removed (%v), unchanged (%v)", added, removed, unchanged)
+	} else if s.log != nil {
+		s.log.Debugf("Computed diff: added (%d), removed (%d), unchanged (%d)", len(added), len(removed), len(unchanged))
 	}
 	curDiff = append(added, removed...)
 	s.roalock.RUnlock()
