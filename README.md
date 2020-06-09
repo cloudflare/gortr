@@ -46,7 +46,15 @@ towards it's Global IP Network (AS 2914). More information is available [here](h
 _GTT deployed GoRTR along with OctoRPKI. The setup currently provides 400+ RTR sessions to their routers for filtering
 RPKI invalids._
 
+</br>
+
+<img align="left" src="docs/images/cogent.png" alt="Cogent" width="150px"/>
+
+_Cogent deployed GoRTR and OctoRPKI at the end of May 2020. 8 validators feed approximately 2500 routers._
+
 </br></br>
+
+Router vendors also used this software to develop their implementations.
 
 _Do you use this tool at scale? Let us know!_
 
