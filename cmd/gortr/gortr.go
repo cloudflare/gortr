@@ -87,6 +87,7 @@ var (
 
 	Etag            = flag.Bool("etag", true, "Enable Etag header")
 	UserAgent       = flag.String("useragent", fmt.Sprintf("Cloudflare-%v (+https://github.com/cloudflare/gortr)", AppVersion), "User-Agent header")
+	Mime            = flag.String("mime", "application/json", "Accept setting format (some servers may prefer text/json)")
 	RefreshInterval = flag.Int("refresh", 600, "Refresh interval in seconds")
 	MaxConn         = flag.Int("maxconn", 0, "Max simultaneous connections (0 to disable limit)")
 	SendNotifs      = flag.Bool("notifications", true, "Send notifications to clients")
@@ -197,7 +198,9 @@ func (s *state) fetchFile(file string) ([]byte, error) {
 		client := &http.Client{Transport: tr}
 		req, err := http.NewRequest("GET", file, nil)
 		req.Header.Set("User-Agent", s.userAgent)
-		req.Header.Set("Accept", "text/json")
+		if s.mime != "" {
+			req.Header.Set("Accept", s.mime)
+		}
 
 		etag, ok := s.etags[file]
 		if s.enableEtags && ok {
@@ -537,6 +540,7 @@ type state struct {
 	lastts        time.Time
 	sendNotifs    bool
 	userAgent     string
+	mime          string
 	etags         map[string]string
 	enableEtags   bool
 	useSerial     int
@@ -675,6 +679,7 @@ func main() {
 		verify:       *Verify,
 		checktime:    *TimeCheck,
 		userAgent:    *UserAgent,
+		mime:         *Mime,
 		etags:        make(map[string]string),
 		enableEtags:  *Etag,
 		lockJson:     &sync.RWMutex{},
