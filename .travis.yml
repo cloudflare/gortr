@@ -4,6 +4,8 @@ jobs:
     - stage: test
       os: linux
       language: go
+      go:
+        - "1.14.x"
       env:
         GO111MODULE=on
       script:
@@ -13,6 +15,8 @@ jobs:
     - stage: compile
       os: linux
       language: go
+      go:
+        - "1.14.x"
       env:
         GO111MODULE=on
         BUILDINFOSDET=-travis
