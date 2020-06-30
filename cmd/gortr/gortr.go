@@ -222,7 +222,10 @@ func (s *state) fetchFile(file string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-
+		if fhttp.Body != nil {
+			defer fhttp.Body.Close()
+		}
+		defer client.CloseIdleConnections()
 		RefreshStatusCode.WithLabelValues(file, fmt.Sprintf("%d", fhttp.StatusCode)).Inc()
 
 		if fhttp.StatusCode == 304 {
