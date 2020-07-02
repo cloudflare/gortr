@@ -599,7 +599,7 @@ func (s *Server) loopTCP(tcplist net.Listener, logEnv string, clientCallback Cli
 
 		if s.maxconn > 0 && s.connected >= s.maxconn {
 			if s.log != nil {
-				s.log.Warnf("Could not accept %s connection from %v (not enough slots avaible: %d)", logEnv, tcpconn.RemoteAddr(), s.maxconn)
+				s.log.Warnf("Could not accept %s connection from %v (not enough slots available: %d)", logEnv, tcpconn.RemoteAddr(), s.maxconn)
 			}
 			tcpconn.Close()
 		} else {
