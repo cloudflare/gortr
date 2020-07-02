@@ -97,7 +97,7 @@ $ go build cmd/gortr/gortr.go
 If you do not want to use Docker, please go to the next section.
 
 If you have **Docker**, you can start GoRTR with `docker run -ti -p 8082:8082 cloudflare/gortr`.
-The containers contains Cloudflare's public signing key and an testing ECDSA private
+The containers contain Cloudflare's public signing key and an testing ECDSA private
 key for the SSH server.
 
 It will automatically download Cloudflare's prefix list and use the public key
@@ -332,7 +332,7 @@ Use your own validator, as long as the JSON source follows the following schema:
   * [NTT](https://rpki.gin.ntt.net/api/export.json) (based on OpenBSD's `rpki-client`)
   * [RIPE](https://rpki-validator.ripe.net/api/export.json) (based on RIPE NCC's RPKI Cache Validator)
 
-To use a data source that do not contains signatures or validity information, pass:
+To use a data source that do not contain signatures or validity information, pass:
 `-verify=false -checktime=false`
 
 **[Note: for boolean flags, it requires the equal sign](https://golang.org/pkg/flag/#hdr-Command_line_flag_syntax)**
