@@ -109,7 +109,7 @@ var (
 	LastRefresh = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "rpki_refresh",
-			Help: "Last successfull request for the given URL.",
+			Help: "Last successful request for the given URL.",
 		},
 		[]string{"path"},
 	)
