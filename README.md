@@ -25,14 +25,14 @@ a secure distribution of the file over its CDN before being sent to the routers.
 
 _GoRTR also powers the public RTR server available on rtr.rpki.cloudflare.com on port 8282 and 8283 for SSH (rpki/rpki)_
 
-<br> 
+<br>
 
 <img align="left" src="docs/images/telia.png" alt="Telia" width="200px">
 
 _Telia has deployed RPKI and uses GoRTR connected with OctoRPKI and rpki-client to distribute the ROAs to its routers.
 Instances of the RTR servers handle around 250 sessions each._
 
-<br> 
+<br>
 
 <img align="left" src="docs/images/ntt.png" alt="NTT" width="150px">
 
@@ -57,7 +57,6 @@ _Cogent deployed GoRTR and OctoRPKI at the end of May 2020. 8 validators feed ap
 Router vendors also used this software to develop their implementations.
 
 _Do you use this tool at scale? Let us know!_
-
 
 ## Features of the server
 
@@ -105,15 +104,18 @@ It will automatically download Cloudflare's prefix list and use the public key
 to validate it.
 
 You can now use any CLI attributes as long as they are after the image name:
+
 ```bash
 $ docker run -ti -p 8083:8083 cloudflare/gortr -bind :8083
 ```
 
 If you want to build your own image of GoRTR:
+
 ```bash
 $ docker build -t mygortr -f Dockerfile.gortr.prod .
 $ docker run -ti mygortr -h
 ```
+
 It will download the code from GitHub and compile it with Go and also generate an ECDSA key for SSH.
 
 Please note: if you plan to use SSH with Cloudflare's default container (`cloudflare/gortr`),
@@ -145,6 +147,7 @@ $ make dist-key build-gortr
 The compiled file will be in `/dist`.
 
 Or you can use a package (or binary) file from the [Releases page](https://github.com/cloudflare/gortr/releases):
+
 ```bash
 $ sudo dpkg -i gortr[...].deb
 $ sudo systemctl start gortr
@@ -154,6 +157,7 @@ If you want to sign your list of prefixes, generate an ECDSA key.
 Then generate the public key to be used in GoRTR.
 You will have to setup your validator to use this key or have another
 tool to sign the JSON file before passing it to GoRTR.
+
 ```bash
 $ openssl ecparam -genkey -name prime256v1 -noout -outform pem > private.pem
 $ openssl ec -in private.pem -pubout -outform pem > public.pem
@@ -185,6 +189,7 @@ This was tested with a basic Squid proxy. The `User-Agent` header is passed
 in the CONNECT.
 
 You have to export the following two variables in order for GoRTR to use the proxy.
+
 ```
 export HTTP_PROXY=schema://host:port
 export HTTPS_PROXY=schema://host:port
@@ -212,6 +217,7 @@ $ ./gortr -ssh.bind :8282 -tls.key private.pem -tls.cert server.pem
 You can run GoRTR and listen for SSH connections only (just pass `-bind ""`).
 
 You will have to create an ECDSA key. You can use the following command:
+
 ```bash
 $ openssl ecparam -genkey -name prime256v1 -noout -outform pem > private.pem
 ```
@@ -227,11 +233,13 @@ By default, there is no authentication.
 You can use password and key authentication:
 
 For example, to configure user **rpki** and password **rpki**:
+
 ```bash
 $ ./gortr -ssh.bind :8282 -ssh.key private.pem -ssh.method.password=true -ssh.auth.user rpki -ssh.auth.password rpki -bind ""
 ```
 
 And to configure a bypass for every SSH key:
+
 ```bash
 $ ./gortr -ssh.bind :8282 -ssh.key private.pem -ssh.method.key=true -ssh.auth.key.bypass=true -bind ""
 ```
@@ -305,6 +313,7 @@ You can also fetch the re-generated JSON from the `-export.path` endpoint (defau
 ### Data sources
 
 Use your own validator, as long as the JSON source follows the following schema:
+
 ```
 {
   "roas": [
@@ -322,7 +331,7 @@ Use your own validator, as long as the JSON source follows the following schema:
 * **Third-party JSON formatted VRP exports:**
   * [NTT](https://rpki.gin.ntt.net/api/export.json) (based on OpenBSD's `rpki-client`)
   * [RIPE](https://rpki-validator.ripe.net/api/export.json) (based on RIPE NCC's RPKI Cache Validator)
-  
+
 To use a data source that do not contains signatures or validity information, pass:
 `-verify=false -checktime=false`
 
@@ -333,6 +342,7 @@ Cloudflare's prefix list removes duplicates and entries that are not routed on t
 By default, the session ID will be randomly generated. The serial will start at zero.
 
 You can define a serial to start with the following way:
+
 * the JSON must contain a `serial` field in `metadata`; and
 * the flag `-useserial` must be set to 1 or 2
 
@@ -437,11 +447,11 @@ You may want to use the option to do SSH-based connection.
 On Cisco, you can have only one RTR server per IP.
 
 To configure a session for `192.168.1.100:8282`:
-Replace `65001` by the configured ASN: 
+Replace `65001` by the configured ASN:
 
 ```
 router bgp 65001
- rpki server 192.168.1.100 
+ rpki server 192.168.1.100
   transport tcp port 8282
  !
 !
@@ -453,10 +463,9 @@ where `xxx` is the password.
 Some experimentations showed you have to configure
 the username/password first, otherwise it will not accept the port.
 
-
 ```
 router bgp 65001
- rpki server 192.168.1.100 
+ rpki server 192.168.1.100
   username rpki
   transport ssh port 8282
  !
@@ -465,7 +474,7 @@ ssh client tcp-window-scale 14
 ssh timeout 120
 ```
 
-The last two SSH statements solved an issue causing the 
+The last two SSH statements solved an issue causing the
 connection to break before receiving all the PDUs (TCP window full problem).
 
 To visualize the state of the session:
