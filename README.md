@@ -17,7 +17,7 @@ _This software comes with no warranty._
 
 ## In the field
 
-<img align="left" src="docs/images/cloudflare.png" alt="Cloudflare" width="200px"/>
+<img align="left" src="docs/images/cloudflare.png" alt="Cloudflare" width="200px">
 
 _Cloudflare operates 200+ GoRTR globally. They provide redundancy in at the PoP level.
 This provides increased reliability by computing a unique prefix list and providing
@@ -25,34 +25,34 @@ a secure distribution of the file over its CDN before being sent to the routers.
 
 _GoRTR also powers the public RTR server available on rtr.rpki.cloudflare.com on port 8282 and 8283 for SSH (rpki/rpki)_
 
-</br> 
+<br> 
 
-<img align="left" src="docs/images/telia.png" alt="Telia" width="200px"/>
+<img align="left" src="docs/images/telia.png" alt="Telia" width="200px">
 
 _Telia has deployed RPKI and uses GoRTR connected with OctoRPKI and rpki-client to distribute the ROAs to its routers.
 Instances of the RTR servers handle around 250 sessions each._
 
-</br> 
+<br> 
 
-<img align="left" src="docs/images/ntt.png" alt="NTT" width="150px"/>
+<img align="left" src="docs/images/ntt.png" alt="NTT" width="150px">
 
 _NTT has deployed OpenBSD's rpki-client together with GoRTR to facilitate rejecting RPKI Invalid BGP route announcements
 towards it's Global IP Network (AS 2914). More information is available [here](https://www.us.ntt.net/support/policy/rr.cfm#RPKI)._
 
-</br>
+<br>
 
-<img align="left" src="docs/images/gtt.png" alt="GTT" width="100px"/>
+<img align="left" src="docs/images/gtt.png" alt="GTT" width="100px">
 
 _GTT deployed GoRTR along with OctoRPKI. The setup currently provides 400+ RTR sessions to their routers for filtering
 RPKI invalids._
 
-</br>
+<br>
 
-<img align="left" src="docs/images/cogent.png" alt="Cogent" width="150px"/>
+<img align="left" src="docs/images/cogent.png" alt="Cogent" width="150px">
 
 _Cogent deployed GoRTR and OctoRPKI at the end of May 2020. 8 validators feed approximately 2500 routers._
 
-</br></br>
+<br>
 
 Router vendors also used this software to develop their implementations.
 
