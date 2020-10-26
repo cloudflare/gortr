@@ -19,7 +19,9 @@ import (
 )
 
 const (
-	AppVersion = "RTRdump 0.11.0"
+	version    = ""
+	buildinfos = ""
+	AppVersion = "RTRdump " + version + " " + buildinfos
 
 	ENV_SSH_PASSWORD = "RTR_SSH_PASSWORD"
 	ENV_SSH_KEY      = "RTR_SSH_KEY"
