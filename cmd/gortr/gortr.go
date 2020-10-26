@@ -14,13 +14,12 @@ import (
 	"fmt"
 	rtr "github.com/cloudflare/gortr/lib"
 	"github.com/cloudflare/gortr/prefixfile"
+	"github.com/cloudflare/gortr/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
-	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -172,98 +171,6 @@ func metricHTTP() {
 	log.Fatal(http.ListenAndServe(*MetricsAddr, nil))
 }
 
-func (s *state) fetchFile(file string) ([]byte, error) {
-	var f io.Reader
-	var err error
-	if len(file) > 8 && (file[0:7] == "http://" || file[0:8] == "https://") {
-
-		// Copying base of DefaultTransport from https://golang.org/src/net/http/transport.go
-		// There is a proposal for a Clone of
-		tr := &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			ProxyConnectHeader:    map[string][]string{},
-		}
-		// Keep User-Agent in proxy request
-		tr.ProxyConnectHeader.Set("User-Agent", s.userAgent)
-
-		client := &http.Client{Transport: tr}
-		req, err := http.NewRequest("GET", file, nil)
-		req.Header.Set("User-Agent", s.userAgent)
-		if s.mime != "" {
-			req.Header.Set("Accept", s.mime)
-		}
-
-		etag, ok := s.etags[file]
-		if s.enableEtags && ok {
-			req.Header.Set("If-None-Match", etag)
-		}
-
-		proxyurl, err := http.ProxyFromEnvironment(req)
-		if err != nil {
-			return nil, err
-		}
-		proxyreq := http.ProxyURL(proxyurl)
-		tr.Proxy = proxyreq
-
-		if err != nil {
-			return nil, err
-		}
-
-		fhttp, err := client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		if fhttp.Body != nil {
-			defer fhttp.Body.Close()
-		}
-		defer client.CloseIdleConnections()
-		RefreshStatusCode.WithLabelValues(file, fmt.Sprintf("%d", fhttp.StatusCode)).Inc()
-
-		if fhttp.StatusCode == 304 {
-			LastRefresh.WithLabelValues(file).Set(float64(s.lastts.UnixNano() / 1e9))
-			return nil, HttpNotModified{
-				File: file,
-			}
-		} else if fhttp.StatusCode != 200 {
-			delete(s.etags, file)
-			return nil, fmt.Errorf("HTTP %s", fhttp.Status)
-		}
-		LastRefresh.WithLabelValues(file).Set(float64(s.lastts.UnixNano() / 1e9))
-
-		f = fhttp.Body
-
-		newEtag := fhttp.Header.Get("ETag")
-
-		if !s.enableEtags || newEtag == "" || newEtag != s.etags[file] {
-			s.etags[file] = newEtag
-		} else {
-			return nil, IdenticalEtag{
-				File: file,
-				Etag: newEtag,
-			}
-		}
-	} else {
-		f, err = os.Open(file)
-		if err != nil {
-			return nil, err
-		}
-	}
-	data, err := ioutil.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
-}
-
 func checkFile(data []byte) ([]byte, error) {
 	hsum := sha256.Sum256(data)
 	return hsum[:], nil
@@ -331,33 +238,23 @@ func (e IdenticalFile) Error() string {
 	return fmt.Sprintf("File %s is identical to the previous version", e.File)
 }
 
-type HttpNotModified struct {
-	File string
-}
-
-func (e HttpNotModified) Error() string {
-	return fmt.Sprintf("HTTP 304 Not modified for %s", e.File)
-}
-
-type IdenticalEtag struct {
-	File string
-	Etag string
-}
-
-func (e IdenticalEtag) Error() string {
-	return fmt.Sprintf("File %s is identical according to Etag: %s", e.File, e.Etag)
-}
-
 func (s *state) updateFile(file string) error {
 	sessid, _ := s.server.GetSessionId(nil)
 
 	log.Debugf("Refreshing cache from %s", file)
 
 	s.lastts = time.Now().UTC()
-	data, err := s.fetchFile(file)
+	data, code, lastrefresh, err := s.fetchConfig.FetchFile(file)
 	if err != nil {
 		return err
 	}
+	if lastrefresh {
+		LastRefresh.WithLabelValues(file).Set(float64(s.lastts.UnixNano() / 1e9))
+	}
+	if code != -1 {
+		RefreshStatusCode.WithLabelValues(file, fmt.Sprintf("%d", code)).Inc()
+	}
+
 	hsum, _ := checkFile(data)
 	if s.lasthash != nil {
 		cres := bytes.Compare(s.lasthash, hsum)
@@ -471,9 +368,15 @@ func (s *state) updateFile(file string) error {
 
 func (s *state) updateSlurm(file string) error {
 	log.Debugf("Refreshing slurm from %v", file)
-	data, err := s.fetchFile(file)
+	data, code, lastrefresh, err := s.fetchConfig.FetchFile(file)
 	if err != nil {
 		return err
+	}
+	if lastrefresh {
+		LastRefresh.WithLabelValues(file).Set(float64(s.lastts.UnixNano() / 1e9))
+	}
+	if code != -1 {
+		RefreshStatusCode.WithLabelValues(file, fmt.Sprintf("%d", code)).Inc()
 	}
 
 	buf := bytes.NewBuffer(data)
@@ -502,9 +405,9 @@ func (s *state) routineUpdate(file string, interval int, slurmFile string) {
 			err := s.updateSlurm(slurmFile)
 			if err != nil {
 				switch err.(type) {
-				case HttpNotModified:
+				case utils.HttpNotModified:
 					log.Info(err)
-				case IdenticalEtag:
+				case utils.IdenticalEtag:
 					log.Info(err)
 				default:
 					log.Errorf("Slurm: %v", err)
@@ -514,9 +417,9 @@ func (s *state) routineUpdate(file string, interval int, slurmFile string) {
 		err := s.updateFile(file)
 		if err != nil {
 			switch err.(type) {
-			case HttpNotModified:
+			case utils.HttpNotModified:
 				log.Info(err)
-			case IdenticalEtag:
+			case utils.IdenticalEtag:
 				log.Info(err)
 			case IdenticalFile:
 				log.Info(err)
@@ -542,11 +445,9 @@ type state struct {
 	lastchange    time.Time
 	lastts        time.Time
 	sendNotifs    bool
-	userAgent     string
-	mime          string
-	etags         map[string]string
-	enableEtags   bool
 	useSerial     int
+
+	fetchConfig *utils.FetchConfig
 
 	server *rtr.Server
 
@@ -681,12 +582,13 @@ func main() {
 		pubkey:       pubkey,
 		verify:       *Verify,
 		checktime:    *TimeCheck,
-		userAgent:    *UserAgent,
-		mime:         *Mime,
-		etags:        make(map[string]string),
-		enableEtags:  *Etag,
 		lockJson:     &sync.RWMutex{},
+
+		fetchConfig: utils.NewFetchConfig(),
 	}
+	s.fetchConfig.UserAgent = *UserAgent
+	s.fetchConfig.Mime = *Mime
+	s.fetchConfig.EnableEtags = *Etag
 
 	if serialId, ok := serialToId[*UseSerial]; ok {
 		s.useSerial = serialId
@@ -727,11 +629,11 @@ func main() {
 	err := s.updateFile(*CacheBin)
 	if err != nil {
 		switch err.(type) {
-		case HttpNotModified:
+		case utils.HttpNotModified:
 			log.Info(err)
 		case IdenticalFile:
 			log.Info(err)
-		case IdenticalEtag:
+		case utils.IdenticalEtag:
 			log.Info(err)
 		default:
 			log.Errorf("Error updating: %v", err)
@@ -743,9 +645,9 @@ func main() {
 		err := s.updateSlurm(slurmFile)
 		if err != nil {
 			switch err.(type) {
-			case HttpNotModified:
+			case utils.HttpNotModified:
 				log.Info(err)
-			case IdenticalEtag:
+			case utils.IdenticalEtag:
 				log.Info(err)
 			default:
 				log.Errorf("Slurm: %v", err)
