@@ -10,6 +10,8 @@ import (
 	rtr "github.com/cloudflare/gortr/lib"
 	"github.com/cloudflare/gortr/prefixfile"
 	"github.com/cloudflare/gortr/utils"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 	"io/ioutil"
@@ -53,7 +55,6 @@ var (
 	PrimarySSHAuthKey      = flag.String("primary.ssh.auth.key", "id_rsa", fmt.Sprintf("SSH key file (if blank, will use envvar %s_1)", ENV_SSH_KEY))
 	PrimaryRefresh         = flag.Duration("primary.refresh", time.Second*600, "Refresh interval")
 	PrimaryRTRBreak        = flag.Bool("primary.rtr.break", false, "Break RTR session at each interval")
-	PrimaryRTRSession      = flag.Int("primary.rtr.session", 0, "Session ID")
 
 	SecondaryHost            = flag.String("secondary.host", "https://rpki.cloudflare.com/rpki.json", "secondary server")
 	SecondaryValidateCert    = flag.Bool("secondary.tls.validate", true, "Validate TLS")
@@ -65,7 +66,6 @@ var (
 	SecondarySSHAuthKey      = flag.String("secondary.ssh.auth.key", "id_rsa", fmt.Sprintf("SSH key file (if blank, will use envvar %s_2)", ENV_SSH_KEY))
 	SecondaryRefresh         = flag.Duration("secondary.refresh", time.Second*600, "Refresh interval")
 	SecondaryRTRBreak        = flag.Bool("secondary.rtr.break", false, "Break RTR session at each interval")
-	SecondaryRTRSession      = flag.Int("secondary.rtr.session", 0, "Session ID")
 
 	LogLevel = flag.String("loglevel", "info", "Log level")
 	Version  = flag.Bool("version", false, "Print version")
@@ -80,7 +80,57 @@ var (
 		"password": METHOD_PASSWORD,
 		"key":      METHOD_KEY,
 	}
+
+	ROACount = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "rpki_roas",
+			Help: "Total number of ROAS/amount of differents.",
+		},
+		[]string{"server", "url", "type"},
+	)
+	RTRState = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "rtr_state",
+			Help: "State of the RTR session (up/down).",
+		},
+		[]string{"server", "url"},
+	)
+	RTRSerial = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "rtr_serial",
+			Help: "Serial of the RTR session.",
+		},
+		[]string{"server", "url"},
+	)
+	RTRSession = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "rtr_session",
+			Help: "ID of the RTR session.",
+		},
+		[]string{"server", "url"},
+	)
+	LastUpdate = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "update",
+			Help: "Timestamp of last update.",
+		},
+		[]string{"server", "url"},
+	)
+
+	idToInfo = map[int]string{
+		0: "unknown",
+		1: "primary",
+		2: "secondary",
+	}
 )
+
+func init() {
+	prometheus.MustRegister(ROACount)
+	prometheus.MustRegister(RTRState)
+	prometheus.MustRegister(RTRSerial)
+	prometheus.MustRegister(RTRSession)
+	prometheus.MustRegister(LastUpdate)
+}
 
 func decodeJSON(data []byte) (*prefixfile.ROAList, error) {
 	buf := bytes.NewBuffer(data)
@@ -102,9 +152,8 @@ type Client struct {
 	SSHAuth         string
 	BreakRTR        bool
 
-	serial uint32
-
-	SessionID uint16
+	serial    uint32
+	sessionID uint16
 
 	FetchConfig *utils.FetchConfig
 
@@ -274,6 +323,7 @@ func (c *Client) Start(id int, ch chan int) {
 			c.compLock.Lock()
 			c.roas = tmpRoaMap
 			c.lastUpdate = time.Now().UTC()
+			c.serial = uint32(decoded.Metadata.Serial)
 			c.compLock.Unlock()
 			if ch != nil {
 				ch <- id
@@ -349,6 +399,7 @@ func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
 		}
 	case *rtr.PDUCacheResponse:
 		log.Infof("%d: Received: %v", c.id, pdu)
+		c.sessionID = pdu.SessionId
 	case *rtr.PDUCacheReset:
 		log.Infof("%d: Received: %v", c.id, pdu)
 	case *rtr.PDUSerialNotify:
@@ -362,6 +413,12 @@ func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
 func (c *Client) ClientConnected(cs *rtr.ClientSession) {
 	close(c.unlock)
 	cs.SendResetQuery()
+
+	RTRState.With(
+		prometheus.Labels{
+			"server": idToInfo[c.id],
+			"url":    c.Path,
+		}).Set(float64(1))
 }
 
 func (c *Client) ClientDisconnected(cs *rtr.ClientSession) {
@@ -371,6 +428,12 @@ func (c *Client) ClientDisconnected(cs *rtr.ClientSession) {
 	default:
 		close(c.qrtr)
 	}
+
+	RTRState.With(
+		prometheus.Labels{
+			"server": idToInfo[c.id],
+			"url":    c.Path,
+		}).Set(float64(0))
 }
 
 func (c *Client) continuousRTR(cs *rtr.ClientSession) {
@@ -388,7 +451,7 @@ func (c *Client) continuousRTR(cs *rtr.ClientSession) {
 		case <-c.qrtr:
 			stop = true
 		case <-time.After(c.RefreshInterval):
-			cs.SendSerialQuery(c.SessionID, c.serial)
+			cs.SendSerialQuery(c.sessionID, c.serial)
 		}
 	}
 }
@@ -398,9 +461,10 @@ func (c *Client) GetData() (map[string]*ROAJsonSimple, *diffMetadata) {
 	roas := c.roas
 
 	md := &diffMetadata{
-		URL:    c.Path,
-		Serial: c.serial,
-		Count:  len(roas),
+		URL:       c.Path,
+		Serial:    c.serial,
+		SessionID: c.sessionID,
+		Count:     len(roas),
 
 		RTRRefresh: c.rtrRefresh,
 		RTRRetry:   c.rtrRetry,
@@ -454,6 +518,7 @@ type diffMetadata struct {
 	LastFetch int64  `json:"last-fetch"`
 	URL       string `json:"url"`
 	Serial    uint32 `json:"serial"`
+	SessionID uint16 `json:"session-id"`
 	Count     int    `json:"count"`
 
 	RTRRefresh uint32 `json:"rtr-refresh"`
@@ -519,12 +584,78 @@ func (c *Comparator) Compare() {
 
 			c.md1 = md1
 			c.md2 = md2
+
+			ROACount.With(
+				prometheus.Labels{
+					"server": "primary",
+					"url":    md1.URL,
+					"type":   "total",
+				}).Set(float64(len(roas1)))
+
+			ROACount.With(
+				prometheus.Labels{
+					"server": "primary",
+					"url":    md1.URL,
+					"type":   "diff",
+				}).Set(float64(len(onlyIn1)))
+
+			ROACount.With(
+				prometheus.Labels{
+					"server": "secondary",
+					"url":    md1.URL,
+					"type":   "total",
+				}).Set(float64(len(roas2)))
+
+			ROACount.With(
+				prometheus.Labels{
+					"server": "secondary",
+					"url":    md1.URL,
+					"type":   "diff",
+				}).Set(float64(len(onlyIn2)))
+
+			RTRSerial.With(
+				prometheus.Labels{
+					"server": "primary",
+					"url":    md1.URL,
+				}).Set(float64(md1.Serial))
+
+			RTRSerial.With(
+				prometheus.Labels{
+					"server": "secondary",
+					"url":    md2.URL,
+				}).Set(float64(md2.Serial))
+
+			RTRSession.With(
+				prometheus.Labels{
+					"server": "primary",
+					"url":    md1.URL,
+				}).Set(float64(md1.SessionID))
+
+			RTRSession.With(
+				prometheus.Labels{
+					"server": "secondary",
+					"url":    md2.URL,
+				}).Set(float64(md2.SessionID))
+
 			c.diffLock.Unlock()
 
 			if id == 1 {
 				donePrimary = true
+
+				LastUpdate.With(
+					prometheus.Labels{
+						"server": "primary",
+						"url":    md1.URL,
+					}).Set(float64(md1.LastFetch))
+
 			} else if id == 2 {
 				doneSecondary = true
+
+				LastUpdate.With(
+					prometheus.Labels{
+						"server": "secondary",
+						"url":    md2.URL,
+					}).Set(float64(md2.LastFetch))
 			}
 
 			if c.OneOff && donePrimary && doneSecondary {
@@ -577,7 +708,6 @@ func main() {
 	fc.UserAgent = *UserAgent
 
 	c1 := NewClient()
-	c1.SessionID = uint16(*PrimaryRTRSession)
 	c1.SSHAuth = *PrimarySSHAuth
 	c1.Path = *PrimaryHost
 	c1.RefreshInterval = *PrimaryRefresh
@@ -585,7 +715,6 @@ func main() {
 	c1.BreakRTR = *PrimaryRTRBreak
 
 	c2 := NewClient()
-	c2.SessionID = uint16(*SecondaryRTRSession)
 	c2.SSHAuth = *SecondarySSHAuth
 	c2.Path = *SecondaryHost
 	c2.RefreshInterval = *SecondaryRefresh
@@ -596,7 +725,7 @@ func main() {
 
 	go func() {
 		http.HandleFunc(fmt.Sprintf("/%s", *OutFile), cmp.ServeDiff)
-		//	http.Handle(*MetricsPath, promhttp.Handler())
+		http.Handle(*MetricsPath, promhttp.Handler())
 
 		log.Fatal(http.ListenAndServe(*Addr, nil))
 	}()
