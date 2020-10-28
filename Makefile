@@ -53,7 +53,7 @@ build-rtrdump:
 
 .PHONY: build-rtrmon
 build-rtrmon:
-        go build -ldflags $(LDFLAGS) -o $(OUTPUT_RTRMON) cmd/rtrmon/rtrmon.go 
+	go build -ldflags $(LDFLAGS) -o $(OUTPUT_RTRMON) cmd/rtrmon/rtrmon.go 
 
 .PHONY: docker-gortr
 docker-gortr:
@@ -65,35 +65,35 @@ docker-rtrdump:
 
 .PHONY: docker-rtrmon
 docker-rtrmon:
-        docker build -t $(DOCKER_REPO)$(RTRMON_NAME):$(GORTR_VERSION) --build-arg LDFLAGS=$(LDFLAGS) -f Dockerfile.rtrmon .
+	docker build -t $(DOCKER_REPO)$(RTRMON_NAME):$(GORTR_VERSION) --build-arg LDFLAGS=$(LDFLAGS) -f Dockerfile.rtrmon .
 
 .PHONY: package-deb-gortr
 package-deb-gortr: prepare
 	fpm -s dir -t deb -n $(GORTR_NAME) -v $(VERSION_PKG) \
-        --description "$(DESCRIPTION)"  \
-        --url "$(URL)" \
-        --architecture $(ARCH) \
-        --license "$(LICENSE)" \
-        --deb-no-default-config-files \
-        --package $(DIST_DIR) \
-        $(OUTPUT_GORTR)=/usr/bin/gortr \
-        package/gortr.service=/lib/systemd/system/gortr.service \
-        package/gortr.env=/etc/default/gortr \
-        cmd/gortr/cf.pub=/usr/share/gortr/cf.pub \
-        $(OUTPUT_RTRDUMP)=/usr/bin/rtrdump \
-        $(OUTPUT_RTRMON)=/usr/bin/rtrmon
+	--description "$(DESCRIPTION)"  \
+	--url "$(URL)" \
+	--architecture $(ARCH) \
+	--license "$(LICENSE)" \
+	--deb-no-default-config-files \
+	--package $(DIST_DIR) \
+	$(OUTPUT_GORTR)=/usr/bin/gortr \
+	package/gortr.service=/lib/systemd/system/gortr.service \
+	package/gortr.env=/etc/default/gortr \
+	cmd/gortr/cf.pub=/usr/share/gortr/cf.pub \
+	$(OUTPUT_RTRDUMP)=/usr/bin/rtrdump \
+	$(OUTPUT_RTRMON)=/usr/bin/rtrmon
 
 .PHONY: package-rpm-gortr
 package-rpm-gortr: prepare
 	fpm -s dir -t rpm -n $(GORTR_NAME) -v $(VERSION_PKG) \
-        --description "$(DESCRIPTION)" \
-        --url "$(URL)" \
-        --architecture $(ARCH) \
-        --license "$(LICENSE) "\
-        --package $(DIST_DIR) \
-        $(OUTPUT_GORTR)=/usr/bin/gortr \
-        package/gortr.service=/lib/systemd/system/gortr.service \
-        package/gortr.env=/etc/default/gortr \
-        cmd/gortr/cf.pub=/usr/share/gortr/cf.pub \
-        $(OUTPUT_RTRDUMP)=/usr/bin/rtrdump \
-        $(OUTPUT_RTRMON)=/usr/bin/rtrmon
+	--description "$(DESCRIPTION)" \
+	--url "$(URL)" \
+	--architecture $(ARCH) \
+	--license "$(LICENSE) "\
+	--package $(DIST_DIR) \
+	$(OUTPUT_GORTR)=/usr/bin/gortr \
+	package/gortr.service=/lib/systemd/system/gortr.service \
+	package/gortr.env=/etc/default/gortr \
+	cmd/gortr/cf.pub=/usr/share/gortr/cf.pub \
+	$(OUTPUT_RTRDUMP)=/usr/bin/rtrdump \
+	$(OUTPUT_RTRMON)=/usr/bin/rtrmon
