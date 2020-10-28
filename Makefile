@@ -15,10 +15,12 @@ DESCRIPTION   := GoRTR: a RPKI-to-Router server
 BUILDINFOS    :=  ($(shell date +%FT%T%z)$(BUILDINFOSDET))
 LDFLAGS       := '-X main.version=$(GORTR_VERSION) -X main.buildinfos=$(BUILDINFOS)'
 
-RTRDUMP_NAME        := rtrdump
+RTRDUMP_NAME  := rtrdump
+RTRMON_NAME   := rtrmon
 
 OUTPUT_GORTR := $(DIST_DIR)gortr-$(GORTR_VERSION)-$(GOOS)-$(ARCH)$(EXTENSION)
 OUTPUT_RTRDUMP := $(DIST_DIR)rtrdump-$(GORTR_VERSION)-$(GOOS)-$(ARCH)$(EXTENSION)
+OUTPUT_RTRMON := $(DIST_DIR)rtrmon-$(GORTR_VERSION)-$(GOOS)-$(ARCH)$(EXTENSION)
 
 .PHONY: vet
 vet:
@@ -49,6 +51,10 @@ build-gortr: prepare
 build-rtrdump:
 	go build -ldflags $(LDFLAGS) -o $(OUTPUT_RTRDUMP) cmd/rtrdump/rtrdump.go 
 
+.PHONY: build-rtrmon
+build-rtrmon:
+        go build -ldflags $(LDFLAGS) -o $(OUTPUT_RTRMON) cmd/rtrmon/rtrmon.go 
+
 .PHONY: docker-gortr
 docker-gortr:
 	docker build -t $(DOCKER_REPO)$(GORTR_NAME):$(GORTR_VERSION) --build-arg LDFLAGS=$(LDFLAGS) -f Dockerfile.gortr .
@@ -56,6 +62,10 @@ docker-gortr:
 .PHONY: docker-rtrdump
 docker-rtrdump:
 	docker build -t $(DOCKER_REPO)$(RTRDUMP_NAME):$(GORTR_VERSION) --build-arg LDFLAGS=$(LDFLAGS) -f Dockerfile.rtrdump .
+
+.PHONY: docker-rtrmon
+docker-rtrmon:
+        docker build -t $(DOCKER_REPO)$(RTRMON_NAME):$(GORTR_VERSION) --build-arg LDFLAGS=$(LDFLAGS) -f Dockerfile.rtrmon .
 
 .PHONY: package-deb-gortr
 package-deb-gortr: prepare
@@ -70,7 +80,8 @@ package-deb-gortr: prepare
         package/gortr.service=/lib/systemd/system/gortr.service \
         package/gortr.env=/etc/default/gortr \
         cmd/gortr/cf.pub=/usr/share/gortr/cf.pub \
-        $(OUTPUT_RTRDUMP)=/usr/bin/rtrdump
+        $(OUTPUT_RTRDUMP)=/usr/bin/rtrdump \
+        $(OUTPUT_RTRMON)=/usr/bin/rtrmon
 
 .PHONY: package-rpm-gortr
 package-rpm-gortr: prepare
@@ -84,4 +95,5 @@ package-rpm-gortr: prepare
         package/gortr.service=/lib/systemd/system/gortr.service \
         package/gortr.env=/etc/default/gortr \
         cmd/gortr/cf.pub=/usr/share/gortr/cf.pub \
-        $(OUTPUT_RTRDUMP)=/usr/bin/rtrdump
+        $(OUTPUT_RTRDUMP)=/usr/bin/rtrdump \
+        $(OUTPUT_RTRMON)=/usr/bin/rtrmon
