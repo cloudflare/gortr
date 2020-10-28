@@ -41,9 +41,6 @@ var (
 	MetricsPath = flag.String("metrics", "/metrics", "Metrics path")
 	OutFile     = flag.String("file", "diff.json", "Diff file (or URL path without /)")
 
-	InitSerial = flag.Bool("serial", false, "Send serial query instead of reset")
-	Serial     = flag.Int("serial.value", 0, "Serial number")
-
 	UserAgent = flag.String("useragent", fmt.Sprintf("Cloudflare-%v (+https://github.com/cloudflare/gortr)", AppVersion), "User-Agent header")
 
 	PrimaryHost            = flag.String("primary.host", "tcp://rtr.rpki.cloudflare.com:8282", "primary server")
@@ -105,9 +102,9 @@ type Client struct {
 	SSHAuth         string
 	BreakRTR        bool
 
-	InitSerial bool
-	Serial     uint32
-	SessionID  uint16
+	serial uint32
+
+	SessionID uint16
 
 	FetchConfig *utils.FetchConfig
 
@@ -123,8 +120,13 @@ type Client struct {
 	compRtrLock *sync.RWMutex
 	roasRtr     map[string]*ROAJsonSimple
 
-	ch chan int
-	id int
+	unlock chan bool
+	ch     chan int
+	id     int
+
+	rtrRefresh uint32
+	rtrRetry   uint32
+	rtrExpire  uint32
 }
 
 func NewClient() *Client {
@@ -139,7 +141,6 @@ func NewClient() *Client {
 func (c *Client) Start(id int, ch chan int) {
 	c.ch = ch
 	c.id = id
-	waitTime := c.RefreshInterval
 
 	pathUrl, err := url.Parse(c.Path)
 	if err != nil {
@@ -154,7 +155,7 @@ func (c *Client) Start(id int, ch chan int) {
 
 		if !bypass {
 			select {
-			case <-time.After(waitTime):
+			case <-time.After(c.RefreshInterval):
 			}
 		}
 		bypass = false
@@ -181,7 +182,7 @@ func (c *Client) Start(id int, ch chan int) {
 							return errors.New(fmt.Sprintf("Server key hash %v is different than expected key hash SHA256:%v", serverKeyHash, c.SSHServerKey))
 						}
 					}
-					log.Infof("Connected to server %v via ssh. Fingerprint: %v", remote.String(), serverKeyHash)
+					log.Infof("%d: Connected to server %v via ssh. Fingerprint: %v", id, remote.String(), serverKeyHash)
 					return nil
 				},
 			}
@@ -211,26 +212,28 @@ func (c *Client) Start(id int, ch chan int) {
 					configSSH.Auth = append(configSSH.Auth, ssh.PublicKeys(signer))
 				}
 			} else {
-				log.Fatalf("Auth type %v unknown", c.SSHAuth)
+				log.Fatalf("%d: Auth type %v unknown", id, c.SSHAuth)
 			}
 
-			log.Infof("Connecting with %v to %v", connType, rtrAddr)
+			log.Infof("%d: Connecting with %v to %v", id, connType, rtrAddr)
 
 			c.qrtr = make(chan bool)
+			c.unlock = make(chan bool)
+			if !c.BreakRTR {
+				go c.continuousRTR(clientSession)
+			}
 
 			err := clientSession.Start(rtrAddr, typeToId[connType], configTLS, configSSH)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			go c.continuousRTR(clientSession)
-
 			select {
 			case <-c.qrtr:
-				log.Info("Quitting RTR session")
+				log.Infof("%d: Quitting RTR session", id)
 			}
 		} else {
-			log.Infof("Fetching %s", c.Path)
+			log.Infof("%d: Fetching %s", c.id, c.Path)
 			data, _, _, err := c.FetchConfig.FetchFile(c.Path)
 			if err != nil {
 				log.Error(err)
@@ -244,18 +247,17 @@ func (c *Client) Start(id int, ch chan int) {
 			}
 
 			c.lastUpdate = time.Now().UTC()
-			log.Debugf("TEST %v", decoded)
 
 			tmpRoaMap := make(map[string]*ROAJsonSimple)
 			for _, roa := range decoded.Data {
 				asn, err := roa.GetASN2()
 				if err != nil {
-					log.Errorf("exploration error for %v asn: %v", roa, err)
+					log.Errorf("%d: exploration error for %v asn: %v", id, roa, err)
 					continue
 				}
 				prefix, err := roa.GetPrefix2()
 				if err != nil {
-					log.Errorf("exploration error for %v prefix: %v", roa, err)
+					log.Errorf("%d: exploration error for %v prefix: %v", id, roa, err)
 					continue
 				}
 
@@ -271,6 +273,7 @@ func (c *Client) Start(id int, ch chan int) {
 			}
 			c.compLock.Lock()
 			c.roas = tmpRoaMap
+			c.lastUpdate = time.Now().UTC()
 			c.compLock.Unlock()
 			if ch != nil {
 				ch <- id
@@ -292,7 +295,13 @@ func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
 
 		key := fmt.Sprintf("%s-%d-%d", pdu.Prefix.String(), pdu.MaxLen, pdu.ASN)
 		c.compRtrLock.Lock()
-		c.roasRtr[key] = &roa
+
+		if pdu.Flags == rtr.FLAG_ADDED {
+			c.roasRtr[key] = &roa
+		} else {
+			delete(c.roasRtr, key)
+		}
+
 		c.compRtrLock.Unlock()
 	case *rtr.PDUIPv6Prefix:
 		roa := ROAJsonSimple{
@@ -303,17 +312,19 @@ func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
 
 		key := fmt.Sprintf("%s-%d-%d", pdu.Prefix.String(), pdu.MaxLen, pdu.ASN)
 		c.compRtrLock.Lock()
-		c.roasRtr[key] = &roa
+
+		if pdu.Flags == rtr.FLAG_ADDED {
+			c.roasRtr[key] = &roa
+		} else {
+			delete(c.roasRtr, key)
+		}
+
 		c.compRtrLock.Unlock()
 	case *rtr.PDUEndOfData:
-		//t := time.Now().UTC().UnixNano() / 1000000000
-		/*c.Data.Metadata.Generated = int(t)
-		c.Data.Metadata.Valid = int(t) + int(pdu.RefreshInterval)
-		c.Data.Metadata.Serial = int(pdu.SerialNumber)*/
-		//cs.Disconnect()
-		log.Infof("Received: %v", pdu)
+		log.Infof("%d: Received: %v", c.id, pdu)
 
 		c.compRtrLock.Lock()
+		c.serial = pdu.SerialNumber
 		tmpRoaMap := make(map[string]*ROAJsonSimple, len(c.roasRtr))
 		for key, roa := range c.roasRtr {
 			tmpRoaMap[key] = roa
@@ -322,6 +333,11 @@ func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
 
 		c.compLock.Lock()
 		c.roas = tmpRoaMap
+
+		c.rtrRefresh = pdu.RefreshInterval
+		c.rtrRetry = pdu.RetryInterval
+		c.rtrExpire = pdu.ExpireInterval
+		c.lastUpdate = time.Now().UTC()
 		c.compLock.Unlock()
 
 		if c.ch != nil {
@@ -332,23 +348,24 @@ func (c *Client) HandlePDU(cs *rtr.ClientSession, pdu rtr.PDU) {
 			cs.Disconnect()
 		}
 	case *rtr.PDUCacheResponse:
-		log.Infof("Received: %v", pdu)
+		log.Infof("%d: Received: %v", c.id, pdu)
+	case *rtr.PDUCacheReset:
+		log.Infof("%d: Received: %v", c.id, pdu)
+	case *rtr.PDUSerialNotify:
+		log.Infof("%d: Received: %v", c.id, pdu)
 	default:
-		log.Infof("Received: %v", pdu)
+		log.Infof("%d: Received: %v", c.id, pdu)
 		cs.Disconnect()
 	}
 }
 
 func (c *Client) ClientConnected(cs *rtr.ClientSession) {
-	if c.InitSerial {
-		cs.SendSerialQuery(c.SessionID, c.Serial)
-	} else {
-		cs.SendResetQuery()
-	}
+	close(c.unlock)
+	cs.SendResetQuery()
 }
 
 func (c *Client) ClientDisconnected(cs *rtr.ClientSession) {
-	log.Warn("RTR client disconnected")
+	log.Warnf("%d: RTR client disconnected", c.id)
 	select {
 	case <-c.qrtr:
 	default:
@@ -357,15 +374,44 @@ func (c *Client) ClientDisconnected(cs *rtr.ClientSession) {
 }
 
 func (c *Client) continuousRTR(cs *rtr.ClientSession) {
+	log.Debugf("%d: RTR routine started", c.id)
 	var stop bool
+
+	select {
+	case <-c.unlock:
+	case <-c.qrtr:
+		stop = true
+	}
+
 	for !stop {
 		select {
 		case <-c.qrtr:
 			stop = true
-		case <-time.After():
-			cs.SendSerialQuery(c.SessionID, c.Serial)
+		case <-time.After(c.RefreshInterval):
+			cs.SendSerialQuery(c.SessionID, c.serial)
 		}
 	}
+}
+
+func (c *Client) GetData() (map[string]*ROAJsonSimple, *diffMetadata) {
+	c.compLock.RLock()
+	roas := c.roas
+
+	md := &diffMetadata{
+		URL:    c.Path,
+		Serial: c.serial,
+		Count:  len(roas),
+
+		RTRRefresh: c.rtrRefresh,
+		RTRRetry:   c.rtrRetry,
+		RTRExpire:  c.rtrExpire,
+
+		LastFetch: c.lastUpdate.UnixNano() / 1e9,
+	}
+
+	c.compLock.RUnlock()
+
+	return roas, md
 }
 
 type Comparator struct {
@@ -378,6 +424,8 @@ type Comparator struct {
 
 	diffLock         *sync.RWMutex
 	onlyIn1, onlyIn2 []*ROAJsonSimple
+	md1              *diffMetadata
+	md2              *diffMetadata
 }
 
 func NewComparator(c1, c2 *Client) *Comparator {
@@ -403,9 +451,14 @@ func Diff(a, b map[string]*ROAJsonSimple) []*ROAJsonSimple {
 }
 
 type diffMetadata struct {
-	LastFetch int64
-	URL       string
-	Serial    int
+	LastFetch int64  `json:"last-fetch"`
+	URL       string `json:"url"`
+	Serial    uint32 `json:"serial"`
+	Count     int    `json:"count"`
+
+	RTRRefresh uint32 `json:"rtr-refresh"`
+	RTRRetry   uint32 `json:"rtr-retry"`
+	RTRExpire  uint32 `json:"rtr-expire"`
 }
 
 type ROAJsonSimple struct {
@@ -415,8 +468,8 @@ type ROAJsonSimple struct {
 }
 
 type diffExport struct {
-	MetadataPrimary   int              `json:"metadata-primary"`
-	MetadataSecondary int              `json:"metadata-secondary"`
+	MetadataPrimary   *diffMetadata    `json:"metadata-primary"`
+	MetadataSecondary *diffMetadata    `json:"metadata-secondary"`
 	OnlyInPrimary     []*ROAJsonSimple `json:"only-primary"`
 	OnlyInSecondary   []*ROAJsonSimple `json:"only-secondary"`
 }
@@ -427,10 +480,15 @@ func (c *Comparator) ServeDiff(wr http.ResponseWriter, req *http.Request) {
 	c.diffLock.RLock()
 	d1 := c.onlyIn1
 	d2 := c.onlyIn2
+
+	md1 := c.md1
+	md2 := c.md2
 	c.diffLock.RUnlock()
 	export := diffExport{
-		OnlyInPrimary:   d1,
-		OnlyInSecondary: d2,
+		MetadataPrimary:   md1,
+		MetadataSecondary: md2,
+		OnlyInPrimary:     d1,
+		OnlyInSecondary:   d2,
 	}
 
 	wr.Header().Add("content-type", "application/json")
@@ -447,15 +505,10 @@ func (c *Comparator) Compare() {
 			stop = true
 			continue
 		case id := <-c.comp:
-			log.Infof("Worker %d finished", id)
+			log.Infof("Worker %d finished: comparison", id)
 
-			c.PrimaryClient.compLock.Lock()
-			roas1 := c.PrimaryClient.roas
-			c.PrimaryClient.compLock.Unlock()
-
-			c.SecondaryClient.compLock.Lock()
-			roas2 := c.SecondaryClient.roas
-			c.SecondaryClient.compLock.Unlock()
+			roas1, md1 := c.PrimaryClient.GetData()
+			roas2, md2 := c.SecondaryClient.GetData()
 
 			onlyIn1 := Diff(roas1, roas2)
 			onlyIn2 := Diff(roas2, roas1)
@@ -463,6 +516,9 @@ func (c *Comparator) Compare() {
 			c.diffLock.Lock()
 			c.onlyIn1 = onlyIn1
 			c.onlyIn2 = onlyIn2
+
+			c.md1 = md1
+			c.md2 = md2
 			c.diffLock.Unlock()
 
 			if id == 1 {
@@ -521,8 +577,6 @@ func main() {
 	fc.UserAgent = *UserAgent
 
 	c1 := NewClient()
-	c1.InitSerial = *InitSerial
-	c1.Serial = uint32(*Serial)
 	c1.SessionID = uint16(*PrimaryRTRSession)
 	c1.SSHAuth = *PrimarySSHAuth
 	c1.Path = *PrimaryHost
@@ -531,8 +585,6 @@ func main() {
 	c1.BreakRTR = *PrimaryRTRBreak
 
 	c2 := NewClient()
-	c2.InitSerial = *InitSerial
-	c2.Serial = uint32(*Serial)
 	c2.SessionID = uint16(*SecondaryRTRSession)
 	c2.SSHAuth = *SecondarySSHAuth
 	c2.Path = *SecondaryHost
