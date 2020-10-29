@@ -142,7 +142,6 @@ func decodeJSON(data []byte) (*prefixfile.ROAList, error) {
 }
 
 type Client struct {
-	//Data prefixfile.ROAList
 	ValidateSSH     bool
 	ValidateCert    bool
 	SSHAuthUser     string
@@ -659,7 +658,7 @@ func (c *Comparator) Compare() {
 			}
 
 			if c.OneOff && donePrimary && doneSecondary {
-				// save file
+				// save file (one-off)
 				stop = true
 			}
 
@@ -698,8 +697,6 @@ func main() {
 		fmt.Println(AppVersion)
 		os.Exit(0)
 	}
-
-	//	if len(file) > 8 && (file[0:7] == "http://" || file[0:8] == "https://") {
 
 	lvl, _ := log.ParseLevel(*LogLevel)
 	log.SetLevel(lvl)
