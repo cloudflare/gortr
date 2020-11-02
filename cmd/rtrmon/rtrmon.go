@@ -25,10 +25,6 @@ import (
 )
 
 const (
-	version    = ""
-	buildinfos = ""
-	AppVersion = "RTRmon " + version + " " + buildinfos
-
 	ENV_SSH_PASSWORD = "RTR_SSH_PASSWORD"
 	ENV_SSH_KEY      = "RTR_SSH_KEY"
 
@@ -38,6 +34,10 @@ const (
 )
 
 var (
+	version    = ""
+	buildinfos = ""
+	AppVersion = "RTRmon " + version + " " + buildinfos
+
 	OneOff      = flag.Bool("oneoff", false, "dump as json and exits")
 	Addr        = flag.String("addr", ":8080", "Server address")
 	MetricsPath = flag.String("metrics", "/metrics", "Metrics path")
