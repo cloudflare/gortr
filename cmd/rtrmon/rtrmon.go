@@ -145,11 +145,11 @@ type Client struct {
 	ValidateSSH     bool
 	ValidateCert    bool
 	SSHAuthUser     string
-	SSHAuthKey      string
 	SSHServerKey    string
 	SSHAuthPassword string
-	SSHAuth         string
 	BreakRTR        bool
+	authType        int
+	keyBytes        []byte
 
 	serial    uint32
 	sessionID uint16
@@ -234,33 +234,15 @@ func (c *Client) Start(id int, ch chan int) {
 					return nil
 				},
 			}
-			if authType, ok := authToId[c.SSHAuth]; ok {
-				if authType == METHOD_PASSWORD {
-					password := c.SSHAuthPassword
-					if password == "" {
-						password = os.Getenv(ENV_SSH_PASSWORD)
-					}
-					configSSH.Auth = append(configSSH.Auth, ssh.Password(password))
-				} else if authType == METHOD_KEY {
-					var keyBytes []byte
-					var err error
-					if c.SSHAuthKey == "" {
-						keyBytesStr := os.Getenv(ENV_SSH_KEY)
-						keyBytes = []byte(keyBytesStr)
-					} else {
-						keyBytes, err = ioutil.ReadFile(c.SSHAuthKey)
-						if err != nil {
-							log.Fatal(err)
-						}
-					}
-					signer, err := ssh.ParsePrivateKey(keyBytes)
-					if err != nil {
-						log.Fatal(err)
-					}
-					configSSH.Auth = append(configSSH.Auth, ssh.PublicKeys(signer))
+			if c.authType == METHOD_PASSWORD {
+				password := c.SSHAuthPassword
+				configSSH.Auth = append(configSSH.Auth, ssh.Password(password))
+			} else if c.authType == METHOD_KEY {
+				signer, err := ssh.ParsePrivateKey(c.keyBytes)
+				if err != nil {
+					log.Fatal(err)
 				}
-			} else {
-				log.Fatalf("%d: Auth type %v unknown", id, c.SSHAuth)
+				configSSH.Auth = append(configSSH.Auth, ssh.PublicKeys(signer))
 			}
 
 			log.Infof("%d: Connecting with %v to %v", id, connType, rtrAddr)
@@ -705,18 +687,69 @@ func main() {
 	fc.UserAgent = *UserAgent
 
 	c1 := NewClient()
-	c1.SSHAuth = *PrimarySSHAuth
+	var ok bool
+	c1.authType, ok = authToId[*PrimarySSHAuth]
+	if !ok {
+		log.Fatalf("Auth type %v unknown", *PrimarySSHAuth)
+	}
+
+	c1.SSHAuthUser = *PrimarySSHAuthUser
+	c1.SSHAuthPassword = *PrimarySSHAuthPassword
 	c1.Path = *PrimaryHost
 	c1.RefreshInterval = *PrimaryRefresh
 	c1.FetchConfig = fc
 	c1.BreakRTR = *PrimaryRTRBreak
 
+	if c1.SSHAuthPassword == "" {
+		c1.SSHAuthPassword = os.Getenv(fmt.Sprintf("%s_1", ENV_SSH_PASSWORD))
+	}
+
+	if c1.authType == METHOD_KEY {
+		var keyBytes []byte
+		var err error
+		if *PrimarySSHAuthKey == "" {
+			keyBytesStr := os.Getenv(fmt.Sprintf("%s_1", ENV_SSH_KEY))
+			keyBytes = []byte(keyBytesStr)
+		} else {
+			keyBytes, err = ioutil.ReadFile(*PrimarySSHAuthKey)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		c1.keyBytes = keyBytes
+	}
+
 	c2 := NewClient()
-	c2.SSHAuth = *SecondarySSHAuth
+	c2.authType, ok = authToId[*SecondarySSHAuth]
+	if !ok {
+		log.Fatalf("Auth type %v unknown", *SecondarySSHAuth)
+	}
+
+	c2.SSHAuthUser = *SecondarySSHAuthUser
+	c2.SSHAuthPassword = *SecondarySSHAuthPassword
 	c2.Path = *SecondaryHost
 	c2.RefreshInterval = *SecondaryRefresh
 	c2.FetchConfig = fc
 	c2.BreakRTR = *SecondaryRTRBreak
+
+	if method, ok := authToId[*SecondarySSHAuth]; ok && method == METHOD_KEY {
+		c2.SSHAuthPassword = os.Getenv(fmt.Sprintf("%s_2", ENV_SSH_PASSWORD))
+	}
+
+	if c2.authType == METHOD_KEY {
+		var keyBytes []byte
+		var err error
+		if *SecondarySSHAuthKey == "" {
+			keyBytesStr := os.Getenv(fmt.Sprintf("%s_2", ENV_SSH_KEY))
+			keyBytes = []byte(keyBytesStr)
+		} else {
+			keyBytes, err = ioutil.ReadFile(*SecondarySSHAuthKey)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		c2.keyBytes = keyBytes
+	}
 
 	cmp := NewComparator(c1, c2)
 
