@@ -366,7 +366,7 @@ Implementations on versions may vary.
 | Juniper         | Yes       | No  | No  |                   |
 | Cisco           | Yes       | No  | Yes | Only SSH password |
 | Alcatel         | Yes       | No  | No  |                   |
-| Arista          | No        | No  | No  |                   |
+| Arista          | Yes       | No  | No  |                   |
 | FRRouting       | Yes       | No  | Yes | Only SSH key      |
 | Bird2           | Yes       | No  | Yes | Only SSH key      |
 | Quagga          | Yes       | No  | No  |                   |
@@ -520,6 +520,35 @@ RP/0/RP0/CPU0:ios#sh bgp rpki table
   1.0.0.0/24            24              13335             192.168.1.100
   1.1.1.0/24            24              13335             192.168.1.100
 ```
+
+### Configure on Arista
+```
+router bgp <asn>
+   rpki cache <name>
+      host <ipv4|ipv6|hostname> [vrf <vrfname>] [port <1-65535>] # default port is 323
+      local-interface <interface>
+      preference <1-10>                    # the lower the value, the more preferred
+                                           # default is 5
+      refresh-interval <1-86400 seconds>   # default is 3600
+      expire-interval <600-172800 seconds> # default is 7200
+      retry-interval <1-7200 seconds>      # default is 600
+```
+If multiple caches are configured, the preference controls the priority. Caches which are more preferred will be connected to first, if they are not reachable then connections will be attempted to less preferred caches. If caches have the same preference value, they will all be connected to and the ROAs that are synced from them will be merged together.
+
+To visualize the state of the session:
+
+```
+show bgp rpki cache [<name>]
+show bgp rpki cache counters [errors]
+show bgp rpki roa summary
+```
+
+To visualize the accepted PDUs:
+
+```
+show bgp rpki roa (ipv4|ipv6) [prefix]
+```
+
 
 ## License
 
