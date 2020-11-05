@@ -533,7 +533,9 @@ router bgp <asn>
       expire-interval <600-172800 seconds> # default is 7200
       retry-interval <1-7200 seconds>      # default is 600
 ```
-If multiple caches are configured, the preference controls the priority. Caches which are more preferred will be connected to first, if they are not reachable then connections will be attempted to less preferred caches. If caches have the same preference value, they will all be connected to and the ROAs that are synced from them will be merged together.
+If multiple caches are configured, the preference controls the priority.  
+Caches which are more preferred will be connected to first, if they are not reachable then connections will be attempted to less preferred caches.  
+If caches have the same preference value, they will all be connected to and the ROAs that are synced from them will be merged together.
 
 To visualize the state of the session:
 
