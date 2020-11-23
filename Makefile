@@ -64,7 +64,6 @@ package-deb-gortr: prepare
         --url "$(URL)" \
         --architecture $(ARCH) \
         --license "$(LICENSE)" \
-        --deb-no-default-config-files \
         --package $(DIST_DIR) \
         $(OUTPUT_GORTR)=/usr/bin/gortr \
         package/gortr.service=/lib/systemd/system/gortr.service \
