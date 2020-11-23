@@ -32,6 +32,9 @@ jobs:
         - GOOS=linux make build-rtrdump
         - GOOS=darwin make build-rtrdump
         - GOOS=windows EXTENSION=.exe make build-rtrdump
+        - GOOS=linux make build-rtrmon
+        - GOOS=darwin make build-rtrmon
+        - GOOS=windows EXTENSION=.exe make build-rtrmon
         - make package-deb-gortr package-rpm-gortr
       deploy:
         provider: releases

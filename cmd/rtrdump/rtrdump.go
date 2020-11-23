@@ -19,10 +19,6 @@ import (
 )
 
 const (
-	version    = ""
-	buildinfos = ""
-	AppVersion = "RTRdump " + version + " " + buildinfos
-
 	ENV_SSH_PASSWORD = "RTR_SSH_PASSWORD"
 	ENV_SSH_KEY      = "RTR_SSH_KEY"
 
@@ -32,6 +28,10 @@ const (
 )
 
 var (
+	version    = ""
+	buildinfos = ""
+	AppVersion = "RTRdump " + version + " " + buildinfos
+
 	Connect = flag.String("connect", "127.0.0.1:8282", "Connection address")
 	OutFile = flag.String("file", "output.json", "Output file")
 
