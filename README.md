@@ -1,6 +1,6 @@
 # GoRTR
 
-[![Build Status](https://travis-ci.org/cloudflare/gortr.svg?branch=master)](https://travis-ci.org/cloudflare/gortr)
+[![Build Status](https://github.com/cloudflare/gortr/workflows/Go/badge.svg)](https://github.com/cloudflare/gortr/actions?query=workflow%3AGo)
 [![GoDoc](https://godoc.org/github.com/cloudflare/gortr?status.svg)](https://pkg.go.dev/github.com/cloudflare/gortr)
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/cloudflare/gortr)
 
