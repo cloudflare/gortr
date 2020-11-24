@@ -21,9 +21,7 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Test & Vet
-      run: |
-        make test
-        make vet
+      run: make test vet
       
     - name: Build
       run: |
@@ -38,5 +36,13 @@ jobs:
         GOOS=darwin make build-rtrmon
         GOOS=windows EXTENSION=.exe make build-rtrmon
           
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6
+
+    - name: Install fpm
+      run: gem install fpm
+        
     - name: Package
       run: make package-deb-gortr package-rpm-gortr
