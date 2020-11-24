@@ -46,3 +46,10 @@ jobs:
         
     - name: Package
       run: make package-deb-gortr package-rpm-gortr
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: dist
+        path: dist/*
+        retention-days: 14
