@@ -70,7 +70,6 @@ docker-rtrmon:
 .PHONY: package-deb-gortr
 package-deb-gortr: prepare
 	fpm -s dir -t deb -n $(GORTR_NAME) -v $(VERSION_PKG) \
-<<<<<<< HEAD
         --description "$(DESCRIPTION)"  \
         --url "$(URL)" \
         --architecture $(ARCH) \
@@ -82,20 +81,6 @@ package-deb-gortr: prepare
         cmd/gortr/cf.pub=/usr/share/gortr/cf.pub \
         $(OUTPUT_RTRDUMP)=/usr/bin/rtrdump \
         $(OUTPUT_RTRMON)=/usr/bin/rtrmon
-=======
-	--description "$(DESCRIPTION)"  \
-	--url "$(URL)" \
-	--architecture $(ARCH) \
-	--license "$(LICENSE)" \
-	--deb-no-default-config-files \
-	--package $(DIST_DIR) \
-	$(OUTPUT_GORTR)=/usr/bin/gortr \
-	package/gortr.service=/lib/systemd/system/gortr.service \
-	package/gortr.env=/etc/default/gortr \
-	cmd/gortr/cf.pub=/usr/share/gortr/cf.pub \
-	$(OUTPUT_RTRDUMP)=/usr/bin/rtrdump \
-	$(OUTPUT_RTRMON)=/usr/bin/rtrmon
->>>>>>> fix indentation
 
 .PHONY: package-rpm-gortr
 package-rpm-gortr: prepare
