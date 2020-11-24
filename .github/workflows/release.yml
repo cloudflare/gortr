@@ -58,17 +58,16 @@ jobs:
       uses: actions/github-script@v2
       with:
         github-token: ${{secrets.GITHUB_TOKEN}}
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
         script: |
           const fs = require('fs').promises;
-
+          const upload_url = '${{ steps.create_release.outputs.upload_url }}';
           console.log('created release', { release });
 
           for (let file of await fs.readdir('./dist')) {
             console.log('uploading', file);
 
             await github.repos.uploadReleaseAsset({
-              url: upload_url
+              url: upload_url,
               name: file,
               data: await fs.readFile(`./dist/${file}`)
             }); 
