@@ -40,7 +40,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y rpm ruby ruby-dev
-        gem install fpm
+        sudo gem install fpm
         
     - name: Package
       run: make package-deb-gortr package-rpm-gortr
