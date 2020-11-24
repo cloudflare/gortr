@@ -36,13 +36,11 @@ jobs:
         GOOS=darwin make build-rtrmon
         GOOS=windows EXTENSION=.exe make build-rtrmon
           
-    - name: Set up Ruby 2.6
-      uses: actions/setup-ruby@v1
-      with:
-        ruby-version: 2.6
-
     - name: Install fpm
-      run: gem install fpm
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y rpm ruby ruby-dev
+        gem install fpm
         
     - name: Package
       run: make package-deb-gortr package-rpm-gortr
