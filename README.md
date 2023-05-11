@@ -366,7 +366,7 @@ Implementations on versions may vary.
 | RTRlib          | Yes       | No  | Yes | Only SSH key      |
 | Juniper         | Yes       | No  | No  |                   |
 | Cisco           | Yes       | No  | Yes | Only SSH password |
-| Alcatel         | Yes       | No  | No  |                   |
+| Nokia SROS      | Yes       | No  | No  | Since 9.0.R1(2010)|
 | Arista          | Yes       | No  | No  |                   |
 | FRRouting       | Yes       | No  | Yes | Only SSH key      |
 | Bird2           | Yes       | No  | Yes | Only SSH key      |
@@ -552,6 +552,40 @@ To visualize the accepted PDUs:
 show bgp rpki roa (ipv4|ipv6) [prefix]
 ```
 
+### Configure on Nokia SROS
+```
+/configure router "management" # or "Base" for in-band
+    origin-validation {
+        rpki-session 172.65.0.2 {
+            admin-state enable
+            description "rtr.rpki.cloudflare.com"
+            port 8282
+        }
+    }
+```
+See [this NANOG 67 presentation](https://archive.nanog.org/sites/default/files/GrHankins.pdf) for context
+
+To check the state:
+```
+A:admin@IXPRouter# show router "management" origin-validation rpki-session detail 
+
+===============================================================================
+RPKI Session Information
+===============================================================================
+IP Address         : 172.65.0.2
+Description        : rtr.rpki.cloudflare.com
+-------------------------------------------------------------------------------
+Port               : 8282               Oper State         : established
+Uptime             : 0d 00:29:07        Flaps              : 0
+Active IPv4 Records: 327768             Active IPv6 Records: 67796
+Admin State        : Up                 Local Address      : n/a
+Hold Time          : 600                Refresh Time       : 300
+Stale Route Time   : 3600               Connect Retry      : 120
+Serial ID          : 1                  Session ID         : 9944
+===============================================================================
+No. of Sessions    : 1
+===============================================================================
+```
 
 ## License
 
