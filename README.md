@@ -366,7 +366,7 @@ Implementations on versions may vary.
 | RTRlib          | Yes       | No  | Yes | Only SSH key      |
 | Juniper         | Yes       | No  | No  |                   |
 | Cisco           | Yes       | No  | Yes | Only SSH password |
-| Nokia SROS      | Yes       | No  | No  | Since 9.0.R1(2010)|
+| Nokia SR OS     | Yes       | No  | No  | Since 9.0.R1(2010)|
 | Arista          | Yes       | No  | No  |                   |
 | FRRouting       | Yes       | No  | Yes | Only SSH key      |
 | Bird2           | Yes       | No  | Yes | Only SSH key      |
@@ -552,7 +552,7 @@ To visualize the accepted PDUs:
 show bgp rpki roa (ipv4|ipv6) [prefix]
 ```
 
-### Configure on Nokia SROS
+### Configure on Nokia SR OS
 ```
 /configure router "management" # or "Base" for in-band
     origin-validation {
