@@ -12,13 +12,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	rtr "github.com/cloudflare/gortr/lib"
-	"github.com/cloudflare/gortr/prefixfile"
-	"github.com/cloudflare/gortr/utils"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/crypto/ssh"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -28,6 +21,14 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	rtr "github.com/cloudflare/gortr/lib"
+	"github.com/cloudflare/gortr/prefixfile"
+	"github.com/cloudflare/gortr/utils"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/ssh"
 )
 
 const (
@@ -244,14 +245,12 @@ func (s *state) updateFile(file string) error {
 	log.Debugf("Refreshing cache from %s", file)
 
 	s.lastts = time.Now().UTC()
-	data, code, lastrefresh, err := s.fetchConfig.FetchFile(file)
+	data, code, err := s.fetchConfig.FetchFile(file)
 	if err != nil {
 		return err
 	}
-	if lastrefresh {
-		LastRefresh.WithLabelValues(file).Set(float64(s.lastts.UnixNano() / 1e9))
-	}
 	if code != -1 {
+		LastRefresh.WithLabelValues(file).Set(float64(s.lastts.UnixNano() / 1e9))
 		RefreshStatusCode.WithLabelValues(file, fmt.Sprintf("%d", code)).Inc()
 	}
 
@@ -368,15 +367,14 @@ func (s *state) updateFile(file string) error {
 
 func (s *state) updateSlurm(file string) error {
 	log.Debugf("Refreshing slurm from %v", file)
-	data, code, lastrefresh, err := s.fetchConfig.FetchFile(file)
+	data, code, err := s.fetchConfig.FetchFile(file)
 	if err != nil {
 		return err
 	}
-	if lastrefresh {
-		LastRefresh.WithLabelValues(file).Set(float64(s.lastts.UnixNano() / 1e9))
-	}
+
 	if code != -1 {
 		RefreshStatusCode.WithLabelValues(file, fmt.Sprintf("%d", code)).Inc()
+		LastRefresh.WithLabelValues(file).Set(float64(s.lastts.UnixNano() / 1e9))
 	}
 
 	buf := bytes.NewBuffer(data)

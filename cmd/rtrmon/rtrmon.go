@@ -7,13 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	rtr "github.com/cloudflare/gortr/lib"
-	"github.com/cloudflare/gortr/prefixfile"
-	"github.com/cloudflare/gortr/utils"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/crypto/ssh"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -22,6 +15,14 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	rtr "github.com/cloudflare/gortr/lib"
+	"github.com/cloudflare/gortr/prefixfile"
+	"github.com/cloudflare/gortr/utils"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/ssh"
 )
 
 const (
@@ -264,7 +265,7 @@ func (c *Client) Start(id int, ch chan int) {
 			}
 		} else {
 			log.Infof("%d: Fetching %s", c.id, c.Path)
-			data, _, _, err := c.FetchConfig.FetchFile(c.Path)
+			data, _, err := c.FetchConfig.FetchFile(c.Path)
 			if err != nil {
 				log.Error(err)
 				continue
