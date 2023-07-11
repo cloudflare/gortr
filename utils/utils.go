@@ -7,8 +7,8 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"time"
 	"sync"
+	"time"
 )
 
 type FetchConfig struct {
@@ -22,9 +22,9 @@ type FetchConfig struct {
 
 func NewFetchConfig() *FetchConfig {
 	return &FetchConfig{
-		etags: make(map[string]string),
+		etags:     make(map[string]string),
 		etagsLock: &sync.RWMutex{},
-		Mime: "application/json",
+		Mime:      "application/json",
 	}
 }
 
@@ -45,11 +45,13 @@ func (e IdenticalEtag) Error() string {
 	return fmt.Sprintf("File %s is identical according to Etag: %s", e.File, e.Etag)
 }
 
-func (c *FetchConfig) FetchFile(file string) ([]byte, int, bool, error) {
+func (c *FetchConfig) FetchFile(file string) ([]byte, int, error) {
 	var f io.Reader
 	var err error
-	if len(file) > 8 && (file[0:7] == "http://" || file[0:8] == "https://") {
 
+	status_code := -1
+
+	if len(file) > 8 && (file[0:7] == "http://" || file[0:8] == "https://") {
 		// Copying base of DefaultTransport from https://golang.org/src/net/http/transport.go
 		// There is a proposal for a Clone of
 		tr := &http.Transport{
@@ -65,6 +67,7 @@ func (c *FetchConfig) FetchFile(file string) ([]byte, int, bool, error) {
 			ExpectContinueTimeout: 1 * time.Second,
 			ProxyConnectHeader:    map[string][]string{},
 		}
+
 		// Keep User-Agent in proxy request
 		tr.ProxyConnectHeader.Set("User-Agent", c.UserAgent)
 
@@ -84,61 +87,57 @@ func (c *FetchConfig) FetchFile(file string) ([]byte, int, bool, error) {
 
 		proxyurl, err := http.ProxyFromEnvironment(req)
 		if err != nil {
-			return nil, -1, false, err
+			return nil, -1, err
 		}
 		proxyreq := http.ProxyURL(proxyurl)
 		tr.Proxy = proxyreq
 
-		if err != nil {
-			return nil, -1, false, err
-		}
-
 		fhttp, err := client.Do(req)
 		if err != nil {
-			return nil, -1, false, err
+			return nil, -1, err
 		}
 		if fhttp.Body != nil {
 			defer fhttp.Body.Close()
 		}
 		defer client.CloseIdleConnections()
-		//RefreshStatusCode.WithLabelValues(file, fmt.Sprintf("%d", fhttp.StatusCode)).Inc()
 
 		if fhttp.StatusCode == 304 {
-			//LastRefresh.WithLabelValues(file).Set(float64(s.lastts.UnixNano() / 1e9))
-			return nil, fhttp.StatusCode, true, HttpNotModified{
+			return nil, fhttp.StatusCode, HttpNotModified{
 				File: file,
 			}
-		} else if fhttp.StatusCode != 200 {
+		}
+
+		if fhttp.StatusCode != 200 {
 			c.etagsLock.Lock()
 			delete(c.etags, file)
 			c.etagsLock.Unlock()
-			return nil, fhttp.StatusCode, true, fmt.Errorf("HTTP %s", fhttp.Status)
 		}
-		//LastRefresh.WithLabelValues(file).Set(float64(s.lastts.UnixNano() / 1e9))
-
-		f = fhttp.Body
 
 		newEtag := fhttp.Header.Get("ETag")
-
-		if !c.EnableEtags || newEtag == "" || newEtag != c.etags[file] { // check lock here
-			c.etagsLock.Lock()
-			c.etags[file] = newEtag
-			c.etagsLock.Unlock()
-		} else {
-			return nil, fhttp.StatusCode, true, IdenticalEtag{
+		if c.EnableEtags && newEtag != "" && newEtag == c.etags[file] {
+			return nil, fhttp.StatusCode, IdenticalEtag{
 				File: file,
 				Etag: newEtag,
 			}
 		}
+
+		c.etagsLock.Lock()
+		c.etags[file] = newEtag
+		c.etagsLock.Unlock()
+
+		f = fhttp.Body
+		status_code = fhttp.StatusCode
 	} else {
 		f, err = os.Open(file)
 		if err != nil {
-			return nil, -1, false, err
+			return nil, -1, err
 		}
 	}
+
 	data, err := ioutil.ReadAll(f)
 	if err != nil {
-		return nil, -1, false, err
+		return nil, -1, err
 	}
-	return data, -1, false, nil
+
+	return data, status_code, nil
 }
