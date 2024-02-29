@@ -82,7 +82,7 @@ var (
 	Verify    = flag.Bool("verify", true, "Check signature using provided public key (disable by passing -verify=false)")
 	PublicKey = flag.String("verify.key", "cf.pub", "Public key path (PEM file)")
 
-	CacheBin  = flag.String("cache", "https://rpki.cloudflare.com/rpki.json", "URL of the cached JSON data")
+	CacheBin  = flag.String("cache", "https://rpki.cloudflare.com/v2/rpki.json", "URL of the cached JSON data")
 	UseSerial = flag.String("useserial", "disable", "Use serial contained in file (disable, startup, full)")
 
 	Etag            = flag.Bool("etag", true, "Enable Etag header")
