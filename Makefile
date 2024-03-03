@@ -70,6 +70,7 @@ docker-rtrmon:
 .PHONY: package-deb-gortr
 package-deb-gortr: prepare
 	fpm -s dir -t deb -n $(GORTR_NAME) -v $(VERSION_PKG) \
+	--config-files /etc/default/gortr \
         --description "$(DESCRIPTION)"  \
         --url "$(URL)" \
         --architecture $(ARCH) \
@@ -85,6 +86,7 @@ package-deb-gortr: prepare
 .PHONY: package-rpm-gortr
 package-rpm-gortr: prepare
 	fpm -s dir -t rpm -n $(GORTR_NAME) -v $(VERSION_PKG) \
+	--config-files /etc/default/gortr \
 	--description "$(DESCRIPTION)" \
 	--url "$(URL)" \
 	--architecture $(ARCH) \
