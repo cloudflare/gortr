@@ -851,7 +851,7 @@ func (r ROA) String() string {
 }
 
 func (r1 ROA) Equals(r2 ROA) bool {
-	return r1.MaxLen == r2.MaxLen && r1.ASN == r2.ASN && bytes.Equal(r1.Prefix.IP, r2.Prefix.IP) && bytes.Equal(r1.Prefix.Mask, r2.Prefix.Mask)
+	return r1.MaxLen == r2.MaxLen && r1.ASN == r2.ASN && net.IP.Equal(r1.Prefix.IP, r2.Prefix.IP) && bytes.Equal(r1.Prefix.Mask, r2.Prefix.Mask)
 }
 
 func (r1 ROA) Copy() ROA {
