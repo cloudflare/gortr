@@ -73,6 +73,9 @@ func (c *FetchConfig) FetchFile(file string) ([]byte, int, error) {
 
 		client := &http.Client{Transport: tr}
 		req, err := http.NewRequest("GET", file, nil)
+		if err != nil {
+			return nil, -1, err
+		}
 		req.Header.Set("User-Agent", c.UserAgent)
 		if c.Mime != "" {
 			req.Header.Set("Accept", c.Mime)
